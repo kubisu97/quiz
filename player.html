@@ -330,7 +330,7 @@
         const color = teamColor();
         const remaining = remainingSec();
         const answered = !!store.answer;
-        const locked = answered || remaining === 0;
+        const locked = remaining === 0;
 
         root.innerHTML =
           headerHtml(repName) +
@@ -384,9 +384,11 @@
           ${
             answered
               ? `<div class="bg-emerald-950/50 border border-emerald-700 rounded p-3 text-center text-sm text-emerald-200">
-                  ✓ 回答済み: <strong>${store.answer.choice + 1}. ${escapeHtml(
+                  現在の選択: <strong>${String.fromCharCode(
+                    65 + store.answer.choice
+                  )}. ${escapeHtml(
                   quiz.choices[store.answer.choice]
-                )}</strong>
+                )}</strong>${remaining > 0 ? ' <span class="text-xs text-emerald-300">(時間内は変更OK)</span>' : ""}
                 </div>`
               : remaining === 0
               ? `<div class="bg-zinc-900 border border-zinc-800 rounded p-3 text-center text-sm text-zinc-500">時間切れ</div>`
@@ -463,8 +465,8 @@
           debug("送信中のためスキップ");
           return;
         }
-        if (store.answer) {
-          debug("既に回答済みのためスキップ");
+        if (store.answer && store.answer.choice === choice) {
+          debug("同じ選択肢のためスキップ");
           return;
         }
         if (!store.state || store.state.status !== "voting") {
@@ -476,7 +478,12 @@
           return;
         }
         store.submitting = true;
-        debug(`送信開始: ${String.fromCharCode(65 + choice)}`);
+        const letter = String.fromCharCode(65 + choice);
+        debug(
+          store.answer
+            ? `変更: ${String.fromCharCode(65 + store.answer.choice)} → ${letter}`
+            : `送信: ${letter}`
+        );
         const quizId = store.state.currentQuizId;
         try {
           await setDoc(refs.answer(`${quizId}_${teamId}`), {
@@ -486,7 +493,7 @@
             representative: repName,
             answeredAt: Date.now(),
           });
-          debug(`送信成功: ${String.fromCharCode(65 + choice)}`);
+          debug(`送信成功: ${letter}`);
         } catch (err) {
           console.error(err);
           debug(`送信失敗: ${err.code || ""} ${err.message}`);
