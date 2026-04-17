@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>解答者 - 宴会クイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Noto Sans JP", sans-serif;
+      }
+      .btn-choice {
+        transition: transform 0.08s ease, opacity 0.2s, filter 0.2s;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        color: #fff;
+      }
+      .btn-choice:active {
+        transform: scale(0.96);
+        filter: brightness(1.15);
+      }
+      .btn-choice:disabled {
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 min-h-screen">
+    <main id="root" class="max-w-md mx-auto px-4 py-6 space-y-4 min-h-screen">
+      <p class="text-center text-zinc-500">接続中...</p>
+    </main>
+
+    <script src="env.js"></script>
+    <script type="module">
+      import {
+        ensureSignedIn,
+        envError,
+        refs,
+        TEAM_COLORS,
+        escapeHtml,
+        renderSetupError,
+      } from "./js/firebase-init.js";
+      import {
+        onSnapshot,
+        setDoc,
+        updateDoc,
+      } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+      const root = document.getElementById("root");
+      const params = new URLSearchParams(location.search);
+      const teamId = params.get("team");
+
+      if (envError) {
+        renderSetupError(root, envError);
+        throw new Error(envError);
+      }
+
+      function showInfo(msg) {
+        root.innerHTML = `
+          <div class="min-h-[70vh] flex items-center justify-center">
+            <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center max-w-sm">
+              <p class="text-sm text-zinc-200">${escapeHtml(msg)}</p>
+            </div>
+          </div>`;
+      }
+
+      if (!teamId) {
+        showInfo(
+          "QR コードからアクセスしてください (team パラメータがありません)"
+        );
+        throw new Error("no team param");
+      }
+
+      try {
+        await ensureSignedIn();
+      } catch (err) {
+        renderSetupError(root, err.message || String(err));
+        throw err;
+      }
+
+      const repKey = `enkai:team:${teamId}:rep`;
+
+      const store = {
+        team: null,
+        state: null,
+        quiz: null,
+        answer: null,
+        submitting: false,
+      };
+      let quizUnsub = null;
+      let answerUnsub = null;
+      let lastSubscribedQuizId = null;
+
+      onSnapshot(refs.team(teamId), (snap) => {
+        if (!snap.exists()) {
+          showInfo(
+            "指定されたチームが見つかりません。司会者に確認してください。"
+          );
+          return;
+        }
+        store.team = { id: snap.id, ...snap.data() };
+        render();
+      });
+
+      onSnapshot(refs.state(), (snap) => {
+        store.state = snap.exists() ? snap.data() : null;
+        syncQuizSubscriptions();
+        render();
+      });
+
+      function syncQuizSubscriptions() {
+        const quizId = store.state?.currentQuizId || null;
+        if (quizId === lastSubscribedQuizId) return;
+        lastSubscribedQuizId = quizId;
+        if (quizUnsub) {
+          quizUnsub();
+          quizUnsub = null;
+        }
+        if (answerUnsub) {
+          answerUnsub();
+          answerUnsub = null;
+        }
+        store.quiz = null;
+        store.answer = null;
+        if (!quizId) return;
+        quizUnsub = onSnapshot(refs.quiz(quizId), (qsnap) => {
+          store.quiz = qsnap.exists()
+            ? { id: qsnap.id, ...qsnap.data() }
+            : null;
+          render();
+        });
+        answerUnsub = onSnapshot(
+          refs.answer(`${quizId}_${teamId}`),
+          (asnap) => {
+            store.answer = asnap.exists() ? asnap.data() : null;
+            render();
+          }
+        );
+      }
+
+      function teamColor() {
+        const idx = store.team?.order ?? 0;
+        return TEAM_COLORS[idx % TEAM_COLORS.length];
+      }
+
+      function headerHtml(repName) {
+        const color = teamColor();
+        return `
+          <header class="flex items-center justify-between pt-2 pb-1 border-b border-zinc-800">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
+              <span class="font-medium">${escapeHtml(store.team.name)}</span>
+            </div>
+            <div class="text-xs text-zinc-400">
+              代表: <span class="text-zinc-100">${escapeHtml(repName)}</span>
+              <button id="btn-change-rep" class="ml-2 text-zinc-500 underline">変更</button>
+            </div>
+          </header>`;
+      }
+
+      function render() {
+        if (!store.team || !store.state) return;
+        const savedRep = localStorage.getItem(repKey);
+        if (!savedRep) {
+          renderRepForm();
+          return;
+        }
+        const status = store.state.status;
+        if (status === "voting") renderVoting(savedRep);
+        else if (status === "result") renderResult(savedRep);
+        else if (status === "final_ranking") renderFinal(savedRep);
+        else renderWaiting(savedRep);
+
+        const changeBtn = document.getElementById("btn-change-rep");
+        if (changeBtn) {
+          changeBtn.addEventListener("click", () => {
+            if (confirm("代表者名を変更しますか？")) {
+              localStorage.removeItem(repKey);
+              render();
+            }
+          });
+        }
+      }
+
+      function renderRepForm() {
+        const existing = store.team.representative;
+        const color = teamColor();
+        root.innerHTML = `
+          <header class="pt-4 text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900">
+              <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
+              <span class="font-medium">${escapeHtml(store.team.name)}</span>
+            </div>
+          </header>
+          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mt-4 space-y-4">
+            <h1 class="text-lg font-bold">代表者の名前を入力</h1>
+            ${
+              existing
+                ? `<p class="text-xs bg-amber-950/50 border border-amber-700 rounded p-3 text-amber-100">
+                    現在の代表者: <strong>${escapeHtml(existing)}</strong><br>
+                    別の端末が登録済みです。新しい名前で上書きすると代表者が交代します。
+                  </p>`
+                : ""
+            }
+            <form id="rep-form" class="space-y-3">
+              <input type="text" name="rep" required minlength="1" maxlength="20"
+                placeholder="お名前 (例: やまだ)"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-3 text-base"
+                autofocus>
+              <button type="submit"
+                class="w-full rounded px-4 py-3 font-medium bg-zinc-100 text-zinc-950 hover:bg-white">
+                このチームで参加する
+              </button>
+            </form>
+          </section>
+          <p class="text-xs text-zinc-500 text-center">
+            ※ 代表者のスマホで回答します。変更は司会者に依頼してください。
+          </p>
+        `;
+        document
+          .getElementById("rep-form")
+          .addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const rep = e.target.rep.value.trim();
+            if (!rep) return;
+            localStorage.setItem(repKey, rep);
+            await updateDoc(refs.team(teamId), { representative: rep });
+            render();
+          });
+      }
+
+      function renderWaiting(repName) {
+        root.innerHTML =
+          headerHtml(repName) +
+          `<section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-4 text-center space-y-3">
+            <h1 class="text-lg font-bold">次の問題を待っています</h1>
+            <p class="text-zinc-400 text-sm">
+              メイン画面で問題が出るとここに回答ボタンが表示されます。
+            </p>
+            <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-sm">
+              現在のスコア: <span class="text-xl font-bold">${
+                store.team.score || 0
+              }</span> 点
+            </div>
+          </section>`;
+      }
+
+      function remainingSec() {
+        const elapsed =
+          Date.now() - (store.state.votingStartedAt || Date.now());
+        return Math.max(
+          0,
+          Math.ceil(((store.state.durationMs || 30000) - elapsed) / 1000)
+        );
+      }
+
+      function renderVoting(repName) {
+        if (!store.quiz) {
+          root.innerHTML =
+            headerHtml(repName) +
+            `<section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-4 text-center text-zinc-500">
+              問題を読み込み中...
+            </section>`;
+          return;
+        }
+        const quiz = store.quiz;
+        const color = teamColor();
+        const remaining = remainingSec();
+        const answered = !!store.answer;
+        const locked = answered || remaining === 0;
+
+        root.innerHTML =
+          headerHtml(repName) +
+          `
+          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mt-3 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-zinc-500">
+                問題 ${(store.state.currentQuizIndex ?? 0) + 1}
+              </span>
+              <div class="flex items-center gap-2">
+                <span class="bg-amber-900/40 border border-amber-700 text-amber-200 rounded-full px-2.5 py-0.5 text-xs font-bold">
+                  ${quiz.points || 10} 点
+                </span>
+                <span id="timer" class="text-2xl font-bold ${
+                  remaining <= 5 ? "text-rose-400" : "text-zinc-100"
+                }">${remaining}s</span>
+              </div>
+            </div>
+            <h1 class="text-lg font-bold leading-snug">${escapeHtml(
+              quiz.question
+            )}</h1>
+            ${
+              quiz.imageUrl
+                ? `<img src="${quiz.imageUrl}" class="w-full max-h-64 object-contain rounded border border-zinc-800">`
+                : ""
+            }
+          </section>
+          <section id="choices" class="grid grid-cols-1 gap-3 mt-3">
+            ${quiz.choices
+              .map(
+                (c, i) => {
+                  const selected = answered && store.answer.choice === i;
+                  const dim = locked && !selected;
+                  return `
+              <button type="button"
+                class="btn-choice rounded-xl p-5 font-bold text-xl text-left flex items-center gap-3 shadow-md ${
+                  selected ? "ring-4 ring-white ring-offset-2 ring-offset-zinc-950" : ""
+                }"
+                style="background-color:${color};${dim ? "opacity:0.35;" : ""}"
+                data-choice="${i}"
+                ${locked ? "disabled" : ""}>
+                <span class="w-10 h-10 rounded-full bg-white/90 text-zinc-900 flex items-center justify-center font-black shrink-0">${
+                  String.fromCharCode(65 + i)
+                }</span>
+                <span class="flex-1">${escapeHtml(c)}</span>
+              </button>`;
+                }
+              )
+              .join("")}
+          </section>
+          ${
+            answered
+              ? `<div class="bg-emerald-950/50 border border-emerald-700 rounded p-3 text-center text-sm text-emerald-200">
+                  ✓ 回答済み: <strong>${store.answer.choice + 1}. ${escapeHtml(
+                  quiz.choices[store.answer.choice]
+                )}</strong>
+                </div>`
+              : remaining === 0
+              ? `<div class="bg-zinc-900 border border-zinc-800 rounded p-3 text-center text-sm text-zinc-500">時間切れ</div>`
+              : ""
+          }
+        `;
+        document.querySelectorAll("#choices button").forEach((btn) => {
+          btn.addEventListener("click", () =>
+            submitAnswer(parseInt(btn.dataset.choice, 10), repName)
+          );
+        });
+      }
+
+      function renderResult(repName) {
+        const quiz = store.quiz;
+        const answered = store.answer;
+        const isCorrect =
+          quiz && answered && answered.choice === quiz.correctIndex;
+        root.innerHTML =
+          headerHtml(repName) +
+          `
+          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-3 text-center space-y-3">
+            <h1 class="text-2xl font-bold ${
+              isCorrect ? "text-emerald-400" : !answered ? "text-zinc-400" : "text-rose-400"
+            }">
+              ${
+                !answered
+                  ? "未回答"
+                  : isCorrect
+                  ? "正解"
+                  : "不正解"
+              }
+            </h1>
+            ${
+              quiz
+                ? `<div class="text-sm text-zinc-300">
+                    正解: <strong>${quiz.correctIndex + 1}. ${escapeHtml(
+                    quiz.choices[quiz.correctIndex]
+                  )}</strong>
+                  </div>`
+                : ""
+            }
+            ${
+              answered
+                ? `<div class="text-xs text-zinc-500">
+                    あなたの回答: ${answered.choice + 1}. ${escapeHtml(
+                    quiz?.choices?.[answered.choice] || ""
+                  )}
+                  </div>`
+                : ""
+            }
+            <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-sm">
+              現在のスコア: <span class="text-xl font-bold">${
+                store.team.score || 0
+              }</span> 点
+            </div>
+          </section>`;
+      }
+
+      function renderFinal(repName) {
+        const color = teamColor();
+        root.innerHTML =
+          headerHtml(repName) +
+          `
+          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-3 text-center space-y-4">
+            <h1 class="text-xl font-bold">最終結果</h1>
+            <p class="text-zinc-400 text-sm">メイン画面のランキングをご確認ください</p>
+            <div class="rounded border p-5" style="border-color:${color}">
+              <div class="text-xs text-zinc-400">${escapeHtml(
+                store.team.name
+              )} の最終スコア</div>
+              <div class="text-4xl font-bold mt-2">${store.team.score || 0} 点</div>
+            </div>
+          </section>`;
+      }
+
+      async function submitAnswer(choice, repName) {
+        if (store.submitting || store.answer) return;
+        if (!store.state || store.state.status !== "voting") return;
+        if (remainingSec() === 0) return;
+        store.submitting = true;
+        const quizId = store.state.currentQuizId;
+        try {
+          await setDoc(refs.answer(`${quizId}_${teamId}`), {
+            quizId,
+            teamId,
+            choice,
+            representative: repName,
+            answeredAt: Date.now(),
+          });
+        } catch (err) {
+          console.error(err);
+          alert("送信に失敗しました: " + err.message);
+        } finally {
+          store.submitting = false;
+        }
+      }
+
+      setInterval(() => {
+        if (store.state?.status !== "voting" || !store.quiz) return;
+        const timer = document.getElementById("timer");
+        if (!timer) return;
+        const remaining = remainingSec();
+        timer.textContent = `${remaining}s`;
+        timer.className = `text-2xl font-bold ${
+          remaining <= 5 ? "text-rose-400" : "text-zinc-100"
+        }`;
+        if (remaining === 0 && !store.answer) {
+          document
+            .querySelectorAll("#choices button")
+            .forEach((btn) => (btn.disabled = true));
+        }
+      }, 500);
+    </script>
+  </body>
+</html>

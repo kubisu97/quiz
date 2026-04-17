@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>宴会クイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Noto Sans JP", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 min-h-screen">
+    <main id="root" class="max-w-2xl mx-auto px-6 py-16">
+      <header class="mb-10">
+        <h1 class="text-2xl font-bold">宴会クイズ</h1>
+        <p class="text-sm text-zinc-400 mt-1">
+          司会者・メイン画面・解答者の入口
+        </p>
+      </header>
+
+      <nav class="grid sm:grid-cols-3 gap-3">
+        <a
+          href="admin.html"
+          class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-5 transition"
+        >
+          <div class="text-xs text-zinc-500 mb-1">司会者</div>
+          <div class="font-bold">管理画面</div>
+          <p class="text-xs text-zinc-400 mt-1">
+            チーム・問題の編集、進行操作
+          </p>
+        </a>
+        <a
+          href="main.html"
+          class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-5 transition"
+        >
+          <div class="text-xs text-zinc-500 mb-1">プロジェクター</div>
+          <div class="font-bold">メイン画面</div>
+          <p class="text-xs text-zinc-400 mt-1">
+            QR 表示、問題・タイマー・結果
+          </p>
+        </a>
+        <a
+          href="player.html"
+          class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-5 transition"
+        >
+          <div class="text-xs text-zinc-500 mb-1">参加者</div>
+          <div class="font-bold">解答画面</div>
+          <p class="text-xs text-zinc-400 mt-1">
+            QR 経由でチーム選択、回答
+          </p>
+        </a>
+      </nav>
+
+      <div id="status" class="mt-10 text-xs text-zinc-500"></div>
+      <div id="error-slot"></div>
+    </main>
+
+    <script src="env.js" onerror="window.__ENV_LOAD_FAILED__ = true"></script>
+    <script type="module">
+      import {
+        ensureSignedIn,
+        envError,
+        APP_ID,
+        renderSetupError,
+      } from "./js/firebase-init.js";
+
+      const statusEl = document.getElementById("status");
+      const errorSlot = document.getElementById("error-slot");
+
+      if (envError) {
+        renderSetupError(errorSlot, envError);
+        statusEl.textContent = "Firebase: 未設定";
+      } else {
+        statusEl.textContent = "接続中...";
+        try {
+          const user = await ensureSignedIn();
+          statusEl.textContent = `接続済 / AppID: ${APP_ID} / UID: ${user.uid.slice(
+            0,
+            8
+          )}`;
+        } catch (err) {
+          console.error(err);
+          renderSetupError(errorSlot, err.message || String(err));
+          statusEl.textContent = "Firebase: 接続失敗";
+        }
+      }
+    </script>
+  </body>
+</html>
