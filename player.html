@@ -21,6 +21,9 @@
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
         color: #fff;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
       }
       .btn-choice:active {
         transform: scale(0.96);
@@ -29,12 +32,27 @@
       .btn-choice:disabled {
         cursor: not-allowed;
       }
+      #debug {
+        position: fixed;
+        bottom: 4px;
+        left: 4px;
+        right: 4px;
+        font-size: 10px;
+        color: #71717a;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 50;
+      }
     </style>
   </head>
   <body class="bg-zinc-950 text-zinc-100 min-h-screen">
     <main id="root" class="max-w-md mx-auto px-4 py-6 space-y-4 min-h-screen">
       <p class="text-center text-zinc-500">接続中...</p>
     </main>
+    <div id="debug">起動中...</div>
 
     <script src="env.js"></script>
     <script type="module">
@@ -53,8 +71,14 @@
       } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
       const root = document.getElementById("root");
+      const debugEl = document.getElementById("debug");
       const params = new URLSearchParams(location.search);
       const teamId = params.get("team");
+
+      function debug(msg) {
+        if (debugEl) debugEl.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      }
+      debug("スクリプト読み込み完了");
 
       if (envError) {
         renderSetupError(root, envError);
@@ -78,13 +102,58 @@
       }
 
       try {
-        await ensureSignedIn();
+        const user = await ensureSignedIn();
+        debug(`認証OK / UID: ${user.uid.slice(0, 6)}`);
       } catch (err) {
+        debug(`認証失敗: ${err.message}`);
         renderSetupError(root, err.message || String(err));
         throw err;
       }
 
       const repKey = `enkai:team:${teamId}:rep`;
+
+      root.addEventListener("click", (e) => {
+        const choiceBtn = e.target.closest("button[data-choice]");
+        if (choiceBtn) {
+          if (choiceBtn.disabled) {
+            debug(`タップ検知したが無効: ${choiceBtn.dataset.choice}`);
+            return;
+          }
+          const choice = parseInt(choiceBtn.dataset.choice, 10);
+          const repName = localStorage.getItem(repKey);
+          debug(`タップ検知: ${String.fromCharCode(65 + choice)} (choice=${choice})`);
+          if (!repName) {
+            debug("代表者名が未登録");
+            return;
+          }
+          submitAnswer(choice, repName);
+          return;
+        }
+        if (e.target.id === "btn-change-rep") {
+          if (confirm("代表者名を変更しますか？")) {
+            localStorage.removeItem(repKey);
+            render();
+          }
+        }
+      });
+
+      root.addEventListener("submit", async (e) => {
+        if (e.target.id === "rep-form") {
+          e.preventDefault();
+          const rep = e.target.rep.value.trim();
+          if (!rep) return;
+          debug(`代表者登録: ${rep}`);
+          localStorage.setItem(repKey, rep);
+          try {
+            await updateDoc(refs.team(teamId), { representative: rep });
+            debug(`代表者書き込みOK: ${rep}`);
+            render();
+          } catch (err) {
+            debug(`代表者書き込み失敗: ${err.message}`);
+            alert("代表者登録に失敗: " + err.message);
+          }
+        }
+      });
 
       const store = {
         team: null,
@@ -176,16 +245,6 @@
         else if (status === "result") renderResult(savedRep);
         else if (status === "final_ranking") renderFinal(savedRep);
         else renderWaiting(savedRep);
-
-        const changeBtn = document.getElementById("btn-change-rep");
-        if (changeBtn) {
-          changeBtn.addEventListener("click", () => {
-            if (confirm("代表者名を変更しますか？")) {
-              localStorage.removeItem(repKey);
-              render();
-            }
-          });
-        }
       }
 
       function renderRepForm() {
@@ -223,16 +282,6 @@
             ※ 代表者のスマホで回答します。変更は司会者に依頼してください。
           </p>
         `;
-        document
-          .getElementById("rep-form")
-          .addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const rep = e.target.rep.value.trim();
-            if (!rep) return;
-            localStorage.setItem(repKey, rep);
-            await updateDoc(refs.team(teamId), { representative: rep });
-            render();
-          });
       }
 
       function renderWaiting(repName) {
@@ -336,11 +385,6 @@
               : ""
           }
         `;
-        document.querySelectorAll("#choices button").forEach((btn) => {
-          btn.addEventListener("click", () =>
-            submitAnswer(parseInt(btn.dataset.choice, 10), repName)
-          );
-        });
       }
 
       function renderResult(repName) {
@@ -407,10 +451,24 @@
       }
 
       async function submitAnswer(choice, repName) {
-        if (store.submitting || store.answer) return;
-        if (!store.state || store.state.status !== "voting") return;
-        if (remainingSec() === 0) return;
+        if (store.submitting) {
+          debug("送信中のためスキップ");
+          return;
+        }
+        if (store.answer) {
+          debug("既に回答済みのためスキップ");
+          return;
+        }
+        if (!store.state || store.state.status !== "voting") {
+          debug(`状態が voting でない: ${store.state?.status}`);
+          return;
+        }
+        if (remainingSec() === 0) {
+          debug("時間切れのためスキップ");
+          return;
+        }
         store.submitting = true;
+        debug(`送信開始: ${String.fromCharCode(65 + choice)}`);
         const quizId = store.state.currentQuizId;
         try {
           await setDoc(refs.answer(`${quizId}_${teamId}`), {
@@ -420,9 +478,11 @@
             representative: repName,
             answeredAt: Date.now(),
           });
+          debug(`送信成功: ${String.fromCharCode(65 + choice)}`);
         } catch (err) {
           console.error(err);
-          alert("送信に失敗しました: " + err.message);
+          debug(`送信失敗: ${err.code || ""} ${err.message}`);
+          alert("送信に失敗: " + err.message);
         } finally {
           store.submitting = false;
         }
