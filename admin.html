@@ -295,7 +295,10 @@
             0,
             Math.ceil((currentState.durationMs - elapsed) / 1000)
           );
-          timerText = ` / 残り ${remaining} 秒`;
+          timerText =
+            remaining > 0
+              ? ` / 残り ${remaining} 秒で自動採点`
+              : " / 自動採点中...";
         }
 
         el.innerHTML = `
@@ -596,40 +599,58 @@
           });
         });
 
-      document
-        .getElementById("btn-reveal")
-        .addEventListener("click", async () => {
-          if (!currentState || currentState.status !== "voting") return;
-          const quizId = currentState.currentQuizId;
-          const quiz = quizzes.find((q) => q.id === quizId);
-          if (!quiz) return;
-          if (currentState.scoredForQuizId !== quizId) {
-            const ansSnap = await getDocs(
-              query(refs.answers(), where("quizId", "==", quizId))
-            );
-            const batch = writeBatch(db);
-            const teamMap = new Map(teams.map((t) => [t.id, t]));
-            const points = quiz.points || SCORE_PER_CORRECT;
-            ansSnap.docs.forEach((d) => {
-              const a = d.data();
-              if (a.choice === quiz.correctIndex) {
-                const team = teamMap.get(a.teamId);
-                if (team) {
-                  batch.update(refs.team(a.teamId), {
-                    score: (team.score || 0) + points,
-                  });
-                }
+      async function doReveal() {
+        if (!currentState || currentState.status !== "voting") return;
+        const quizId = currentState.currentQuizId;
+        const quiz = quizzes.find((q) => q.id === quizId);
+        if (!quiz) return;
+        if (currentState.scoredForQuizId !== quizId) {
+          const ansSnap = await getDocs(
+            query(refs.answers(), where("quizId", "==", quizId))
+          );
+          const batch = writeBatch(db);
+          const teamMap = new Map(teams.map((t) => [t.id, t]));
+          const points = quiz.points || SCORE_PER_CORRECT;
+          ansSnap.docs.forEach((d) => {
+            const a = d.data();
+            if (a.choice === quiz.correctIndex) {
+              const team = teamMap.get(a.teamId);
+              if (team) {
+                batch.update(refs.team(a.teamId), {
+                  score: (team.score || 0) + points,
+                });
               }
-            });
-            batch.update(stateRef, {
-              status: "result",
-              scoredForQuizId: quizId,
-            });
-            await batch.commit();
-          } else {
-            await updateDoc(stateRef, { status: "result" });
-          }
-        });
+            }
+          });
+          batch.update(stateRef, {
+            status: "result",
+            scoredForQuizId: quizId,
+          });
+          await batch.commit();
+        } else {
+          await updateDoc(stateRef, { status: "result" });
+        }
+      }
+
+      document.getElementById("btn-reveal").addEventListener("click", doReveal);
+
+      let autoRevealInFlight = false;
+      setInterval(async () => {
+        if (!currentState || currentState.status !== "voting") {
+          autoRevealInFlight = false;
+          return;
+        }
+        if (autoRevealInFlight) return;
+        const elapsed =
+          Date.now() - (currentState.votingStartedAt || Date.now());
+        if (elapsed < (currentState.durationMs || 30000)) return;
+        autoRevealInFlight = true;
+        try {
+          await doReveal();
+        } finally {
+          autoRevealInFlight = false;
+        }
+      }, 500);
 
       document
         .getElementById("btn-final")

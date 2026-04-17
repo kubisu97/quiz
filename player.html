@@ -75,10 +75,18 @@
       const params = new URLSearchParams(location.search);
       const teamId = params.get("team");
 
+      const APP_VERSION = "v2";
       function debug(msg) {
-        if (debugEl) debugEl.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        if (debugEl) debugEl.textContent = `${APP_VERSION} [${new Date().toLocaleTimeString()}] ${msg}`;
       }
       debug("スクリプト読み込み完了");
+
+      document.addEventListener("pointerdown", (e) => {
+        const btn = e.target.closest("button[data-choice]");
+        if (btn) {
+          debug(`ポインタDOWN: choice=${btn.dataset.choice} disabled=${btn.disabled}`);
+        }
+      }, true);
 
       if (envError) {
         renderSetupError(root, envError);
@@ -497,12 +505,15 @@
         timer.className = `text-2xl font-bold ${
           remaining <= 5 ? "text-rose-400" : "text-zinc-100"
         }`;
+        if (!store.answer) {
+          debug(`投票中 残${remaining}s answer=${!!store.answer} submitting=${store.submitting}`);
+        }
         if (remaining === 0 && !store.answer) {
           document
             .querySelectorAll("#choices button")
             .forEach((btn) => (btn.disabled = true));
         }
-      }, 500);
+      }, 1000);
     </script>
   </body>
 </html>
