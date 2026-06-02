@@ -104,6 +104,60 @@
         return TEAM_COLORS[idx % TEAM_COLORS.length];
       }
 
+      function parseYouTubeTime(value) {
+        if (!value) return null;
+        if (/^\d+$/.test(value)) return value;
+        const match = String(value).match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+        if (!match) return null;
+        const seconds =
+          (parseInt(match[1] || "0", 10) * 3600) +
+          (parseInt(match[2] || "0", 10) * 60) +
+          parseInt(match[3] || "0", 10);
+        return seconds > 0 ? String(seconds) : null;
+      }
+
+      function youtubeEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          const host = url.hostname.replace(/^www\./, "");
+          let id = null;
+          if (host === "youtu.be") {
+            id = url.pathname.split("/").filter(Boolean)[0];
+          } else if (host.endsWith("youtube.com")) {
+            if (url.pathname === "/watch") {
+              id = url.searchParams.get("v");
+            } else {
+              const parts = url.pathname.split("/").filter(Boolean);
+              if (["embed", "shorts", "live"].includes(parts[0])) id = parts[1];
+            }
+          }
+          if (!id) return null;
+          const embed = new URL(
+            `https://www.youtube.com/embed/${encodeURIComponent(id)}`
+          );
+          embed.searchParams.set("autoplay", "1");
+          embed.searchParams.set("mute", "1");
+          embed.searchParams.set("playsinline", "1");
+          embed.searchParams.set("rel", "0");
+          const start = parseYouTubeTime(
+            url.searchParams.get("start") || url.searchParams.get("t")
+          );
+          if (start) embed.searchParams.set("start", start);
+          return embed.toString();
+        } catch {
+          return null;
+        }
+      }
+
+      function videoHtml(rawUrl, className) {
+        if (!rawUrl) return "";
+        const youtubeUrl = youtubeEmbedUrl(rawUrl);
+        if (youtubeUrl) {
+          return `<iframe src="${escapeHtml(youtubeUrl)}" class="${className}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        }
+        return `<video src="${escapeHtml(rawUrl)}" class="${className}" controls autoplay muted playsinline></video>`;
+      }
+
       function playerUrl(teamId) {
         const url = new URL("player.html", window.location.href);
         url.searchParams.set("team", teamId);
@@ -282,6 +336,10 @@
             <h1 class="text-3xl md:text-5xl font-bold text-center max-w-5xl leading-snug">
               ${escapeHtml(quiz.question)}
             </h1>
+            ${videoHtml(
+              quiz.videoUrl,
+              "w-full max-w-4xl aspect-video rounded-lg border border-zinc-800 bg-black"
+            )}
             ${
               quiz.imageUrl
                 ? `<img src="${quiz.imageUrl}" class="max-h-80 md:max-h-96 rounded-lg border border-zinc-800 object-contain">`
@@ -359,6 +417,10 @@
             <h1 class="text-2xl md:text-3xl font-bold mt-1">
               ${escapeHtml(quiz.question)}
             </h1>
+            ${videoHtml(
+              quiz.videoUrl,
+              "mt-3 w-full max-w-3xl mx-auto aspect-video rounded-lg border border-zinc-800 bg-black"
+            )}
             ${
               quiz.imageUrl
                 ? `<img src="${quiz.imageUrl}" class="mt-3 max-h-56 md:max-h-64 rounded-lg border border-zinc-800 object-contain mx-auto">`

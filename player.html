@@ -226,6 +226,60 @@
         return TEAM_COLORS[idx % TEAM_COLORS.length];
       }
 
+      function parseYouTubeTime(value) {
+        if (!value) return null;
+        if (/^\d+$/.test(value)) return value;
+        const match = String(value).match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+        if (!match) return null;
+        const seconds =
+          (parseInt(match[1] || "0", 10) * 3600) +
+          (parseInt(match[2] || "0", 10) * 60) +
+          parseInt(match[3] || "0", 10);
+        return seconds > 0 ? String(seconds) : null;
+      }
+
+      function youtubeEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          const host = url.hostname.replace(/^www\./, "");
+          let id = null;
+          if (host === "youtu.be") {
+            id = url.pathname.split("/").filter(Boolean)[0];
+          } else if (host.endsWith("youtube.com")) {
+            if (url.pathname === "/watch") {
+              id = url.searchParams.get("v");
+            } else {
+              const parts = url.pathname.split("/").filter(Boolean);
+              if (["embed", "shorts", "live"].includes(parts[0])) id = parts[1];
+            }
+          }
+          if (!id) return null;
+          const embed = new URL(
+            `https://www.youtube.com/embed/${encodeURIComponent(id)}`
+          );
+          embed.searchParams.set("autoplay", "1");
+          embed.searchParams.set("mute", "1");
+          embed.searchParams.set("playsinline", "1");
+          embed.searchParams.set("rel", "0");
+          const start = parseYouTubeTime(
+            url.searchParams.get("start") || url.searchParams.get("t")
+          );
+          if (start) embed.searchParams.set("start", start);
+          return embed.toString();
+        } catch {
+          return null;
+        }
+      }
+
+      function videoHtml(rawUrl) {
+        if (!rawUrl) return "";
+        const youtubeUrl = youtubeEmbedUrl(rawUrl);
+        if (youtubeUrl) {
+          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video rounded border border-zinc-800 bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        }
+        return `<video src="${escapeHtml(rawUrl)}" class="w-full aspect-video rounded border border-zinc-800 bg-black" controls autoplay muted playsinline></video>`;
+      }
+
       function headerHtml(repName) {
         const color = teamColor();
         return `
@@ -352,6 +406,7 @@
             <h1 class="text-lg font-bold leading-snug">${escapeHtml(
               quiz.question
             )}</h1>
+            ${videoHtml(quiz.videoUrl)}
             ${
               quiz.imageUrl
                 ? `<img src="${quiz.imageUrl}" class="w-full max-h-64 object-contain rounded border border-zinc-800">`

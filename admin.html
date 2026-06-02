@@ -399,6 +399,11 @@
                         }</span>`
                     )
                     .join("")}
+                  ${
+                    q.videoUrl
+                      ? `<span class="text-sky-400">動画あり</span>`
+                      : ""
+                  }
                 </div>
               </div>
               <button class="text-xs bg-rose-900 hover:bg-rose-800 border border-rose-800 rounded px-2 py-1"
@@ -573,6 +578,7 @@
             correctIndex: parseInt(fd.get("correctIndex"), 10),
             points: parseInt(fd.get("points"), 10) || 10,
             imageUrl: currentImageDataUrl || null,
+            videoUrl: fd.get("videoUrl").trim() || null,
             order,
           });
           e.target.reset();
