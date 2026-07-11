@@ -3,82 +3,203 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>管理画面 - 宴会クイズ</title>
+    <title>管理画面 - ウェディングクイズ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet" />
     <style>
+      :root {
+        --mq-gold-hi: #f7e39a;
+        --mq-gold: #d4af37;
+        --mq-gold-lo: #8a6a1c;
+        --mq-navy-hi: #1c2f6b;
+        --mq-navy: #0c1740;
+        --mq-navy-lo: #060d28;
+        --mq-ink: #02040f;
+        --mq-text: #f7f3e6;
+        --mq-muted: #a7a4c7;
+      }
       body {
         font-family: "Noto Sans JP", sans-serif;
+        color: var(--mq-text);
+        background-color: var(--mq-ink);
+        background-image:
+          radial-gradient(ellipse 90% 60% at 50% 0%, rgba(47, 76, 167, 0.45), transparent 65%),
+          radial-gradient(ellipse 140% 110% at 50% 55%, #12225c 0%, #081233 55%, #02040f 100%);
+        background-attachment: fixed;
       }
+      .mq-serif { font-family: "Cinzel", "Shippori Mincho B1", serif; letter-spacing: 0.08em; }
+      .mq-mincho { font-family: "Shippori Mincho B1", serif; }
+      .mq-gold-text {
+        background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 55%, var(--mq-gold-lo) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .mq-panel {
+        background: linear-gradient(180deg, rgba(28, 47, 107, 0.5) 0%, rgba(8, 18, 51, 0.92) 100%);
+        border: 1px solid rgba(212, 175, 55, 0.4);
+        border-radius: 0.75rem;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(247, 227, 154, 0.15);
+      }
+      .mq-hex {
+        position: relative;
+        padding: 2px;
+        clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 50%, calc(100% - 26px) 100%, 26px 100%, 0 50%);
+        background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 30%, var(--mq-gold-lo) 65%, var(--mq-gold) 100%);
+      }
+      .mq-hex-inner {
+        width: 100%;
+        height: 100%;
+        clip-path: polygon(25px 0, calc(100% - 25px) 0, 100% 50%, calc(100% - 25px) 100%, 25px 100%, 0 50%);
+        background: linear-gradient(180deg, #1a2b66 0%, #0c1740 50%, #060d28 100%);
+      }
+      .mq-hex-inner--selected {
+        background: linear-gradient(180deg, #ffd98a 0%, #f59e0b 45%, #a85b06 100%);
+        color: #241300;
+      }
+      .mq-hex-inner--correct {
+        background: linear-gradient(180deg, #86efac 0%, #10b981 45%, #047857 100%);
+        color: #04160d;
+        animation: mq-flash 0.9s ease-in-out infinite alternate;
+      }
+      .mq-hex-inner--dim { opacity: 0.35; }
+      @keyframes mq-flash {
+        from { filter: brightness(1); }
+        to { filter: brightness(1.35); }
+      }
+      .mq-hex-letter {
+        font-family: "Cinzel", serif;
+        color: var(--mq-gold-hi);
+        font-weight: 700;
+      }
+      .mq-hex-inner--selected .mq-hex-letter,
+      .mq-hex-inner--correct .mq-hex-letter { color: inherit; }
+      .mq-hexline { position: relative; }
+      .mq-hexline::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 2px;
+        transform: translateY(-1px);
+        background: linear-gradient(90deg, transparent, var(--mq-gold) 12%, var(--mq-gold) 88%, transparent);
+        z-index: 0;
+      }
+      .mq-hexline > .mq-hex { z-index: 1; }
+      .mq-btn {
+        border-radius: 0.5rem;
+        border: 1px solid rgba(212, 175, 55, 0.5);
+        background: linear-gradient(180deg, #1a2b66, #0c1740);
+        color: var(--mq-text);
+        transition: filter 0.15s;
+      }
+      .mq-btn:hover:not(:disabled) { filter: brightness(1.3); }
+      .mq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .mq-btn--gold {
+        background: linear-gradient(180deg, var(--mq-gold-hi), var(--mq-gold) 50%, var(--mq-gold-lo));
+        color: #241300;
+        border-color: var(--mq-gold-hi);
+        font-weight: 700;
+      }
+      .mq-btn--danger {
+        background: linear-gradient(180deg, #7f1d1d, #450a0a);
+        border-color: rgba(248, 113, 113, 0.6);
+      }
+      .mq-input {
+        background: rgba(2, 4, 15, 0.6);
+        border: 1px solid rgba(212, 175, 55, 0.35);
+        border-radius: 0.5rem;
+        color: var(--mq-text);
+      }
+      .mq-input:focus {
+        outline: none;
+        border-color: var(--mq-gold);
+        box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+      }
+      .mq-input::placeholder { color: #8f8cae; }
+
+      /* admin.html 固有 */
+      .mq-file::file-selector-button {
+        margin-right: 0.75rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid rgba(212, 175, 55, 0.5);
+        background: linear-gradient(180deg, #1a2b66, #0c1740);
+        color: var(--mq-gold-hi);
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      .mq-file::file-selector-button:hover { filter: brightness(1.3); }
     </style>
   </head>
-  <body class="bg-zinc-950 text-zinc-100 min-h-screen">
+  <body class="min-h-screen">
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      <header class="flex items-end justify-between border-b border-zinc-800 pb-4">
+      <header class="flex items-end justify-between border-b border-[rgba(212,175,55,.35)] pb-4">
         <div>
-          <h1 class="text-xl font-bold">管理画面</h1>
-          <p id="auth-status" class="text-xs text-zinc-500 mt-1">接続中...</p>
+          <h1 class="text-xl font-bold mq-mincho">
+            管理画面
+            <span class="mq-serif mq-gold-text text-sm font-bold tracking-[0.25em] ml-2 align-middle">WEDDING QUIZ</span>
+          </h1>
+          <p id="auth-status" class="text-xs text-[var(--mq-muted)] mt-1">接続中...</p>
         </div>
-        <a href="index.html" class="text-sm text-zinc-400 hover:text-zinc-100"
+        <a href="index.html" class="text-sm text-[var(--mq-muted)] hover:text-[var(--mq-gold-hi)]"
           >← トップ</a
         >
       </header>
       <div id="error-slot"></div>
       <div id="app" class="hidden space-y-6">
-        <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-          <h2 class="text-sm font-bold text-zinc-300 uppercase tracking-wide">
+        <section class="mq-panel p-5 space-y-4">
+          <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
             進行コントロール
           </h2>
           <div
             id="status-display"
-            class="bg-zinc-950 border border-zinc-800 rounded p-3 text-sm space-y-1"
+            class="bg-black/30 border border-[rgba(212,175,55,.25)] rounded p-3 text-sm space-y-1"
           >
             読み込み中...
           </div>
           <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-2">
             <button
               id="btn-start"
-              class="bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed rounded px-4 py-2 font-medium text-sm"
+              class="mq-btn mq-btn--gold px-4 py-2 font-medium text-sm"
             >
               次の問題スタート
             </button>
             <button
               id="btn-reveal"
-              class="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed rounded px-4 py-2 font-medium text-sm"
+              class="mq-btn px-4 py-2 font-medium text-sm"
             >
               正解発表・採点
             </button>
             <button
               id="btn-final"
-              class="bg-zinc-700 hover:bg-zinc-600 rounded px-4 py-2 font-medium text-sm"
+              class="mq-btn px-4 py-2 font-medium text-sm"
             >
               最終結果表示
             </button>
             <button
               id="btn-reset"
-              class="bg-rose-700 hover:bg-rose-600 rounded px-4 py-2 font-medium text-sm"
+              class="mq-btn mq-btn--danger px-4 py-2 font-medium text-sm"
             >
               リセット
             </button>
           </div>
         </section>
 
-        <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
+        <section class="mq-panel p-5 space-y-4">
           <div class="flex items-center justify-between">
-            <h2 class="text-sm font-bold text-zinc-300 uppercase tracking-wide">
+            <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
               チーム
             </h2>
             <button
               id="btn-seed-teams"
-              class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-3 py-1"
+              class="mq-btn text-xs px-3 py-1"
             >
               デフォルト 5 チーム作成
             </button>
           </div>
-          <p class="text-xs text-zinc-500">
+          <p class="text-xs text-[var(--mq-muted)]">
             各チームの QR はメイン画面で表示されます。参加者は QR 読み取り後、代表者名を入力してチームを決定します。
           </p>
           <div id="team-list" class="space-y-2"></div>
@@ -88,84 +209,84 @@
               name="name"
               placeholder="新しいチーム名"
               required
-              class="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm"
+              class="flex-1 mq-input px-3 py-2 text-sm"
             />
             <button
               type="submit"
-              class="bg-emerald-600 hover:bg-emerald-500 rounded px-4 py-2 text-sm font-medium"
+              class="mq-btn mq-btn--gold px-4 py-2 text-sm font-medium"
             >
               追加
             </button>
           </form>
         </section>
 
-        <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-          <h2 class="text-sm font-bold text-zinc-300 uppercase tracking-wide">
+        <section class="mq-panel p-5 space-y-4">
+          <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
             クイズ
           </h2>
           <div id="quiz-list" class="space-y-2"></div>
-          <form id="quiz-form" class="space-y-2 bg-zinc-950 border border-zinc-800 p-4 rounded">
+          <form id="quiz-form" class="space-y-2 bg-black/30 border border-[rgba(212,175,55,.25)] p-4 rounded">
             <input
               type="text"
               name="question"
               placeholder="問題文 (例: この人は誰でしょう？)"
               required
-              class="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm"
+              class="w-full mq-input px-3 py-2 text-sm"
             />
             <div class="flex items-start gap-3 flex-wrap">
               <input type="file" id="quiz-image" accept="image/*"
-                class="text-xs text-zinc-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-zinc-800 file:text-zinc-200 file:text-xs hover:file:bg-zinc-700 file:cursor-pointer">
+                class="text-xs text-[var(--mq-muted)] mq-file">
               <div id="quiz-image-preview" class="hidden flex items-center gap-2">
-                <img id="quiz-image-preview-img" class="h-16 w-16 object-cover rounded border border-zinc-800">
+                <img id="quiz-image-preview-img" class="h-16 w-16 object-cover rounded border border-[rgba(212,175,55,.4)]">
                 <button type="button" id="btn-clear-image"
-                  class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-2 py-1">画像クリア</button>
-                <span id="quiz-image-size" class="text-xs text-zinc-500"></span>
+                  class="mq-btn text-xs px-2 py-1">画像クリア</button>
+                <span id="quiz-image-size" class="text-xs text-[var(--mq-muted)]"></span>
               </div>
             </div>
             <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube または MP4 の直接URL)"
-              class="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm">
+              class="w-full mq-input px-3 py-2 text-sm">
             <div class="grid sm:grid-cols-2 gap-2">
               <input
                 type="text"
                 name="choice0"
-                placeholder="選択肢 1"
+                placeholder="選択肢 A"
                 required
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm"
+                class="mq-input px-3 py-2 text-sm"
               />
               <input
                 type="text"
                 name="choice1"
-                placeholder="選択肢 2"
+                placeholder="選択肢 B"
                 required
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm"
+                class="mq-input px-3 py-2 text-sm"
               />
               <input
                 type="text"
                 name="choice2"
-                placeholder="選択肢 3"
+                placeholder="選択肢 C"
                 required
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm"
+                class="mq-input px-3 py-2 text-sm"
               />
               <input
                 type="text"
                 name="choice3"
-                placeholder="選択肢 4"
+                placeholder="選択肢 D"
                 required
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm"
+                class="mq-input px-3 py-2 text-sm"
               />
             </div>
             <div class="flex gap-2 items-center flex-wrap text-sm">
-              <label class="text-zinc-400">正解:</label>
+              <label class="text-[var(--mq-muted)]">正解:</label>
               <select
                 name="correctIndex"
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2"
+                class="mq-input px-3 py-2"
               >
-                <option value="0">選択肢 1</option>
-                <option value="1">選択肢 2</option>
-                <option value="2">選択肢 3</option>
-                <option value="3">選択肢 4</option>
+                <option value="0">A</option>
+                <option value="1">B</option>
+                <option value="2">C</option>
+                <option value="3">D</option>
               </select>
-              <label class="text-zinc-400 ml-2">点数:</label>
+              <label class="text-[var(--mq-muted)] ml-2">点数:</label>
               <input
                 type="number"
                 name="points"
@@ -173,11 +294,11 @@
                 max="1000"
                 value="10"
                 required
-                class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 w-20"
+                class="mq-input px-3 py-2 w-20"
               />
               <button
                 type="submit"
-                class="ml-auto bg-emerald-600 hover:bg-emerald-500 rounded px-4 py-2 font-medium"
+                class="ml-auto mq-btn mq-btn--gold px-4 py-2 font-medium"
               >
                 追加
               </button>
@@ -272,6 +393,7 @@
       onSnapshot(query(refs.teams(), orderBy("order")), (snap) => {
         teams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         renderTeams();
+        renderStatus();
       });
 
       setInterval(() => {
@@ -304,7 +426,7 @@
         }
 
         el.innerHTML = `
-          <div>ステータス: <strong class="text-zinc-100">${label}</strong>${timerText}</div>
+          <div>ステータス: <strong class="mq-gold-text font-bold">${label}</strong>${timerText}</div>
           <div>現在の問題: ${
             quiz
               ? `#${currentState.currentQuizIndex + 1} ${escapeHtml(
@@ -312,7 +434,7 @@
                 )}`
               : "未設定"
           }</div>
-          <div class="text-zinc-500">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
+          <div class="text-[var(--mq-muted)]">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
         `;
       }
 
@@ -331,30 +453,30 @@
         const list = document.getElementById("team-list");
         if (teams.length === 0) {
           list.innerHTML =
-            '<p class="text-xs text-zinc-500">チーム未登録</p>';
+            '<p class="text-xs text-[var(--mq-muted)]">チーム未登録</p>';
           return;
         }
         list.innerHTML = teams
           .map((t, i) => {
             const color = TEAM_COLORS[i % TEAM_COLORS.length];
             return `
-            <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 p-2 rounded flex-wrap text-sm">
+            <div class="flex items-center gap-2 bg-black/30 border border-[rgba(212,175,55,.25)] p-2 rounded flex-wrap text-sm">
               <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
-              <input class="flex-1 min-w-[120px] bg-zinc-900 border border-zinc-800 rounded px-2 py-1"
+              <input class="flex-1 min-w-[120px] mq-input px-2 py-1"
                 value="${escapeHtml(t.name)}" data-action="rename" data-id="${t.id}">
-              <span class="text-zinc-500">スコア <span class="text-zinc-100">${
+              <span class="text-[var(--mq-muted)]">スコア <span class="mq-gold-text font-bold">${
                 t.score || 0
               }</span></span>
-              <span class="text-zinc-500">代表 ${
+              <span class="text-[var(--mq-muted)]">代表 ${
                 t.representative
-                  ? `<span class="text-zinc-100">${escapeHtml(
+                  ? `<span class="text-[var(--mq-text)]">${escapeHtml(
                       t.representative
                     )}</span>`
-                  : `<span class="text-zinc-600">未登録</span>`
+                  : `<span class="text-[#6b688f]">未登録</span>`
               }</span>
-              <button class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-2 py-1"
+              <button class="mq-btn text-xs px-2 py-1"
                 data-action="clear-rep" data-id="${t.id}">代表クリア</button>
-              <button class="text-xs bg-rose-900 hover:bg-rose-800 border border-rose-800 rounded px-2 py-1"
+              <button class="mq-btn mq-btn--danger text-xs px-2 py-1"
                 data-action="delete" data-id="${t.id}">削除</button>
             </div>`;
           })
@@ -365,28 +487,28 @@
         const list = document.getElementById("quiz-list");
         if (quizzes.length === 0) {
           list.innerHTML =
-            '<p class="text-xs text-zinc-500">問題未登録</p>';
+            '<p class="text-xs text-[var(--mq-muted)]">問題未登録</p>';
           return;
         }
         list.innerHTML = quizzes
           .map(
             (q, i) => `
-          <div class="bg-zinc-950 border border-zinc-800 p-3 rounded">
+          <div class="bg-black/30 border border-[rgba(212,175,55,.25)] p-3 rounded">
             <div class="flex items-start gap-2">
-              <span class="text-xs text-zinc-500 font-mono">#${i + 1}</span>
+              <span class="text-xs text-[var(--mq-muted)] font-mono">#${i + 1}</span>
               ${
                 q.imageUrl
-                  ? `<img src="${q.imageUrl}" class="w-12 h-12 object-cover rounded border border-zinc-800 shrink-0">`
+                  ? `<img src="${q.imageUrl}" class="w-12 h-12 object-cover rounded border border-[rgba(212,175,55,.4)] shrink-0">`
                   : ""
               }
               <div class="flex-1 text-sm">
                 <div class="font-medium flex items-center gap-2 flex-wrap">
                   <span>${escapeHtml(q.question)}</span>
-                  <span class="text-xs bg-amber-900/40 border border-amber-700 text-amber-200 rounded px-2 py-0.5">${
+                  <span class="text-xs border border-[var(--mq-gold)] mq-gold-text font-bold rounded px-2 py-0.5">${
                     q.points || 10
                   } 点</span>
                 </div>
-                <div class="text-xs text-zinc-500 mt-1 flex flex-wrap gap-x-3">
+                <div class="text-xs text-[var(--mq-muted)] mt-1 flex flex-wrap gap-x-3">
                   ${q.choices
                     .map(
                       (c, idx) =>
@@ -394,7 +516,7 @@
                           idx === q.correctIndex
                             ? "text-emerald-400"
                             : ""
-                        }">${idx + 1}. ${escapeHtml(c)}${
+                        }">${["A", "B", "C", "D"][idx]}. ${escapeHtml(c)}${
                           idx === q.correctIndex ? " ✓" : ""
                         }</span>`
                     )
@@ -406,7 +528,7 @@
                   }
                 </div>
               </div>
-              <button class="text-xs bg-rose-900 hover:bg-rose-800 border border-rose-800 rounded px-2 py-1"
+              <button class="mq-btn mq-btn--danger text-xs px-2 py-1"
                 data-action="delete-quiz" data-id="${q.id}">削除</button>
             </div>
           </div>`

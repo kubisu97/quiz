@@ -6,24 +6,137 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>解答者 - 宴会クイズ</title>
+    <title>解答者 - ウェディングクイズ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet" />
     <style>
-      body {
-        font-family: "Noto Sans JP", sans-serif;
-      }
+:root {
+  --mq-gold-hi: #f7e39a;
+  --mq-gold: #d4af37;
+  --mq-gold-lo: #8a6a1c;
+  --mq-navy-hi: #1c2f6b;
+  --mq-navy: #0c1740;
+  --mq-navy-lo: #060d28;
+  --mq-ink: #02040f;
+  --mq-text: #f7f3e6;
+  --mq-muted: #a7a4c7;
+}
+body {
+  font-family: "Noto Sans JP", sans-serif;
+  color: var(--mq-text);
+  background-color: var(--mq-ink);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(47, 76, 167, 0.45), transparent 65%),
+    radial-gradient(ellipse 140% 110% at 50% 55%, #12225c 0%, #081233 55%, #02040f 100%);
+  background-attachment: fixed;
+}
+.mq-serif { font-family: "Cinzel", "Shippori Mincho B1", serif; letter-spacing: 0.08em; }
+.mq-mincho { font-family: "Shippori Mincho B1", serif; }
+.mq-gold-text {
+  background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 55%, var(--mq-gold-lo) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mq-panel {
+  background: linear-gradient(180deg, rgba(28, 47, 107, 0.5) 0%, rgba(8, 18, 51, 0.92) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(247, 227, 154, 0.15);
+}
+.mq-hex {
+  position: relative;
+  padding: 2px;
+  clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 50%, calc(100% - 26px) 100%, 26px 100%, 0 50%);
+  background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 30%, var(--mq-gold-lo) 65%, var(--mq-gold) 100%);
+}
+.mq-hex-inner {
+  width: 100%;
+  height: 100%;
+  clip-path: polygon(25px 0, calc(100% - 25px) 0, 100% 50%, calc(100% - 25px) 100%, 25px 100%, 0 50%);
+  background: linear-gradient(180deg, #1a2b66 0%, #0c1740 50%, #060d28 100%);
+}
+.mq-hex-inner--selected {
+  background: linear-gradient(180deg, #ffd98a 0%, #f59e0b 45%, #a85b06 100%);
+  color: #241300;
+}
+.mq-hex-inner--correct {
+  background: linear-gradient(180deg, #86efac 0%, #10b981 45%, #047857 100%);
+  color: #04160d;
+  animation: mq-flash 0.9s ease-in-out infinite alternate;
+}
+.mq-hex-inner--dim { opacity: 0.35; }
+@keyframes mq-flash {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.35); }
+}
+.mq-hex-letter {
+  font-family: "Cinzel", serif;
+  color: var(--mq-gold-hi);
+  font-weight: 700;
+}
+.mq-hex-inner--selected .mq-hex-letter,
+.mq-hex-inner--correct .mq-hex-letter { color: inherit; }
+.mq-hexline { position: relative; }
+.mq-hexline::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-1px);
+  background: linear-gradient(90deg, transparent, var(--mq-gold) 12%, var(--mq-gold) 88%, transparent);
+  z-index: 0;
+}
+.mq-hexline > .mq-hex { z-index: 1; }
+.mq-btn {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  background: linear-gradient(180deg, #1a2b66, #0c1740);
+  color: var(--mq-text);
+  transition: filter 0.15s;
+}
+.mq-btn:hover:not(:disabled) { filter: brightness(1.3); }
+.mq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mq-btn--gold {
+  background: linear-gradient(180deg, var(--mq-gold-hi), var(--mq-gold) 50%, var(--mq-gold-lo));
+  color: #241300;
+  border-color: var(--mq-gold-hi);
+  font-weight: 700;
+}
+.mq-btn--danger {
+  background: linear-gradient(180deg, #7f1d1d, #450a0a);
+  border-color: rgba(248, 113, 113, 0.6);
+}
+.mq-input {
+  background: rgba(2, 4, 15, 0.6);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 0.5rem;
+  color: var(--mq-text);
+}
+.mq-input:focus {
+  outline: none;
+  border-color: var(--mq-gold);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+}
+.mq-input::placeholder { color: #8f8cae; }
       .btn-choice {
         transition: transform 0.08s ease, opacity 0.2s, filter 0.2s;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
-        color: #fff;
+        color: var(--mq-text);
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
+      }
+      .btn-choice.mq-hex {
+        display: block;
+        width: 100%;
+        text-align: left;
+      }
+      .btn-choice .mq-hex-inner {
+        min-height: 4.25rem;
       }
       .btn-choice:active {
         transform: scale(0.96);
@@ -48,9 +161,9 @@
       }
     </style>
   </head>
-  <body class="bg-zinc-950 text-zinc-100 min-h-screen">
+  <body class="min-h-screen">
     <main id="root" class="max-w-md mx-auto px-4 py-6 space-y-4 min-h-screen">
-      <p class="text-center text-zinc-500">接続中...</p>
+      <p class="text-center text-[color:var(--mq-muted)]">接続中...</p>
     </main>
     <div id="debug">起動中...</div>
 
@@ -96,8 +209,8 @@
       function showInfo(msg) {
         root.innerHTML = `
           <div class="min-h-[70vh] flex items-center justify-center">
-            <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center max-w-sm">
-              <p class="text-sm text-zinc-200">${escapeHtml(msg)}</p>
+            <div class="mq-panel p-6 text-center max-w-sm">
+              <p class="text-sm text-[color:var(--mq-text)]">${escapeHtml(msg)}</p>
             </div>
           </div>`;
       }
@@ -275,22 +388,22 @@
         if (!rawUrl) return "";
         const youtubeUrl = youtubeEmbedUrl(rawUrl);
         if (youtubeUrl) {
-          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video rounded border border-zinc-800 bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
-        return `<video src="${escapeHtml(rawUrl)}" class="w-full aspect-video rounded border border-zinc-800 bg-black" controls autoplay muted playsinline></video>`;
+        return `<video src="${escapeHtml(rawUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" controls autoplay muted playsinline></video>`;
       }
 
       function headerHtml(repName) {
         const color = teamColor();
         return `
-          <header class="flex items-center justify-between pt-2 pb-1 border-b border-zinc-800">
+          <header class="flex items-center justify-between pt-2 pb-2 border-b border-[rgba(212,175,55,0.35)]">
             <div class="flex items-center gap-2 text-sm">
               <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
-              <span class="font-medium">${escapeHtml(store.team.name)}</span>
+              <span class="font-medium mq-mincho">${escapeHtml(store.team.name)}</span>
             </div>
-            <div class="text-xs text-zinc-400">
-              代表: <span class="text-zinc-100">${escapeHtml(repName)}</span>
-              <button id="btn-change-rep" class="ml-2 text-zinc-500 underline">変更</button>
+            <div class="text-xs text-[color:var(--mq-muted)]">
+              代表: <span class="text-[color:var(--mq-text)]">${escapeHtml(repName)}</span>
+              <button id="btn-change-rep" class="ml-2 text-[color:var(--mq-muted)] underline">変更</button>
             </div>
           </header>`;
       }
@@ -313,17 +426,18 @@
         const existing = store.team.representative;
         const color = teamColor();
         root.innerHTML = `
-          <header class="pt-4 text-center">
-            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900">
+          <header class="pt-4 text-center space-y-3">
+            <div class="mq-serif mq-gold-text text-2xl font-bold">WEDDING QUIZ</div>
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[rgba(212,175,55,0.4)] bg-[rgba(8,18,51,0.85)]">
               <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
-              <span class="font-medium">${escapeHtml(store.team.name)}</span>
+              <span class="font-medium mq-mincho">${escapeHtml(store.team.name)}</span>
             </div>
           </header>
-          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mt-4 space-y-4">
-            <h1 class="text-lg font-bold">代表者の名前を入力</h1>
+          <section class="mq-panel p-5 mt-4 space-y-4">
+            <h1 class="text-lg font-bold mq-mincho">代表者の名前を入力</h1>
             ${
               existing
-                ? `<p class="text-xs bg-amber-950/50 border border-amber-700 rounded p-3 text-amber-100">
+                ? `<p class="text-xs bg-amber-950/50 border border-amber-600/60 rounded p-3 text-amber-100">
                     現在の代表者: <strong>${escapeHtml(existing)}</strong><br>
                     別の端末が登録済みです。新しい名前で上書きすると代表者が交代します。
                   </p>`
@@ -332,15 +446,15 @@
             <form id="rep-form" class="space-y-3">
               <input type="text" name="rep" required minlength="1" maxlength="20"
                 placeholder="お名前 (例: やまだ)"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-3 text-base"
+                class="mq-input w-full px-3 py-3 text-base"
                 autofocus>
               <button type="submit"
-                class="w-full rounded px-4 py-3 font-medium bg-zinc-100 text-zinc-950 hover:bg-white">
+                class="mq-btn mq-btn--gold w-full px-4 py-3">
                 このチームで参加する
               </button>
             </form>
           </section>
-          <p class="text-xs text-zinc-500 text-center">
+          <p class="text-xs text-[color:var(--mq-muted)] text-center">
             ※ 代表者のスマホで回答します。変更は司会者に依頼してください。
           </p>
         `;
@@ -349,13 +463,13 @@
       function renderWaiting(repName) {
         root.innerHTML =
           headerHtml(repName) +
-          `<section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-4 text-center space-y-3">
-            <h1 class="text-lg font-bold">次の問題を待っています</h1>
-            <p class="text-zinc-400 text-sm">
+          `<section class="mq-panel p-6 mt-4 text-center space-y-3">
+            <h1 class="text-lg font-bold mq-mincho">次の問題を待っています</h1>
+            <p class="text-[color:var(--mq-muted)] text-sm">
               メイン画面で問題が出るとここに回答ボタンが表示されます。
             </p>
-            <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-sm">
-              現在のスコア: <span class="text-xl font-bold">${
+            <div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-sm">
+              現在のスコア: <span class="mq-serif mq-gold-text text-xl font-bold">${
                 store.team.score || 0
               }</span> 点
             </div>
@@ -375,13 +489,12 @@
         if (!store.quiz) {
           root.innerHTML =
             headerHtml(repName) +
-            `<section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-4 text-center text-zinc-500">
+            `<section class="mq-panel p-6 mt-4 text-center text-[color:var(--mq-muted)]">
               問題を読み込み中...
             </section>`;
           return;
         }
         const quiz = store.quiz;
-        const color = teamColor();
         const remaining = remainingSec();
         const answered = !!store.answer;
         const locked = remaining === 0;
@@ -389,27 +502,25 @@
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mt-3 space-y-3">
+          <section class="mq-panel p-4 mt-3 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-zinc-500">
+              <span class="text-xs text-[color:var(--mq-muted)]">
                 問題 ${(store.state.currentQuizIndex ?? 0) + 1}
               </span>
               <div class="flex items-center gap-2">
-                <span class="bg-amber-900/40 border border-amber-700 text-amber-200 rounded-full px-2.5 py-0.5 text-xs font-bold">
-                  ${quiz.points || 10} 点
-                </span>
-                <span id="timer" class="text-2xl font-bold ${
-                  remaining <= 5 ? "text-rose-400" : "text-zinc-100"
+                <span class="bg-black/30 border border-[rgba(212,175,55,0.5)] rounded-full px-2.5 py-0.5 text-xs font-bold"><span class="mq-gold-text">${quiz.points || 10} 点</span></span>
+                <span id="timer" class="mq-serif text-2xl font-bold ${
+                  remaining <= 5 ? "text-rose-400" : "mq-gold-text"
                 }">${remaining}s</span>
               </div>
             </div>
-            <h1 class="text-lg font-bold leading-snug">${escapeHtml(
+            <h1 class="text-lg font-bold leading-snug mq-mincho">${escapeHtml(
               quiz.question
             )}</h1>
             ${videoHtml(quiz.videoUrl)}
             ${
               quiz.imageUrl
-                ? `<img src="${quiz.imageUrl}" class="w-full max-h-64 object-contain rounded border border-zinc-800">`
+                ? `<img src="${quiz.imageUrl}" class="w-full max-h-64 object-contain rounded border border-[rgba(212,175,55,0.4)]">`
                 : ""
             }
           </section>
@@ -421,16 +532,17 @@
                   const dim = locked && !selected;
                   return `
               <button type="button"
-                class="btn-choice rounded-xl p-5 font-bold text-xl text-left flex items-center gap-3 shadow-md ${
-                  selected ? "ring-4 ring-white ring-offset-2 ring-offset-zinc-950" : ""
-                }"
-                style="background-color:${color};${dim ? "opacity:0.35;" : ""}"
+                class="btn-choice mq-hex"
                 data-choice="${i}"
                 ${locked ? "disabled" : ""}>
-                <span class="w-10 h-10 rounded-full bg-white/90 text-zinc-900 flex items-center justify-center font-black shrink-0">${
-                  String.fromCharCode(65 + i)
-                }</span>
-                <span class="flex-1">${escapeHtml(c)}</span>
+                <div class="mq-hex-inner ${
+                  selected ? "mq-hex-inner--selected" : ""
+                }${dim ? " mq-hex-inner--dim" : ""} flex items-center gap-3 px-9 py-4 font-bold text-lg">
+                  <span class="mq-hex-letter text-xl shrink-0">${
+                    String.fromCharCode(65 + i)
+                  }:</span>
+                  <span class="flex-1">${escapeHtml(c)}</span>
+                </div>
               </button>`;
                 }
               )
@@ -438,15 +550,15 @@
           </section>
           ${
             answered
-              ? `<div class="bg-emerald-950/50 border border-emerald-700 rounded p-3 text-center text-sm text-emerald-200">
+              ? `<div class="bg-amber-950/50 border border-amber-500/60 rounded p-3 text-center text-sm text-amber-100">
                   現在の選択: <strong>${String.fromCharCode(
                     65 + store.answer.choice
                   )}. ${escapeHtml(
                   quiz.choices[store.answer.choice]
-                )}</strong>${remaining > 0 ? ' <span class="text-xs text-emerald-300">(時間内は変更OK)</span>' : ""}
+                )}</strong>${remaining > 0 ? ' <span class="text-xs text-amber-200/80">(時間内は変更OK)</span>' : ""}
                 </div>`
               : remaining === 0
-              ? `<div class="bg-zinc-900 border border-zinc-800 rounded p-3 text-center text-sm text-zinc-500">時間切れ</div>`
+              ? `<div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-center text-sm text-[color:var(--mq-muted)]">時間切れ</div>`
               : ""
           }
         `;
@@ -460,9 +572,9 @@
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-3 text-center space-y-3">
-            <h1 class="text-2xl font-bold ${
-              isCorrect ? "text-emerald-400" : !answered ? "text-zinc-400" : "text-rose-400"
+          <section class="mq-panel p-6 mt-3 text-center space-y-3">
+            <h1 class="mq-mincho text-4xl font-bold ${
+              isCorrect ? "text-[#6ee7b7]" : !answered ? "text-[color:var(--mq-muted)]" : "text-rose-400"
             }">
               ${
                 !answered
@@ -474,8 +586,10 @@
             </h1>
             ${
               quiz
-                ? `<div class="text-sm text-zinc-300">
-                    正解: <strong>${quiz.correctIndex + 1}. ${escapeHtml(
+                ? `<div class="text-sm text-[color:var(--mq-text)]">
+                    正解: <strong><span class="mq-hex-letter">${String.fromCharCode(
+                      65 + quiz.correctIndex
+                    )}</span>. ${escapeHtml(
                     quiz.choices[quiz.correctIndex]
                   )}</strong>
                   </div>`
@@ -483,15 +597,17 @@
             }
             ${
               answered
-                ? `<div class="text-xs text-zinc-500">
-                    あなたの回答: ${answered.choice + 1}. ${escapeHtml(
+                ? `<div class="text-xs text-[color:var(--mq-muted)]">
+                    あなたの回答: ${String.fromCharCode(
+                      65 + answered.choice
+                    )}. ${escapeHtml(
                     quiz?.choices?.[answered.choice] || ""
                   )}
                   </div>`
                 : ""
             }
-            <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-sm">
-              現在のスコア: <span class="text-xl font-bold">${
+            <div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-sm">
+              現在のスコア: <span class="mq-serif mq-gold-text text-xl font-bold">${
                 store.team.score || 0
               }</span> 点
             </div>
@@ -503,14 +619,14 @@
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mt-3 text-center space-y-4">
-            <h1 class="text-xl font-bold">最終結果</h1>
-            <p class="text-zinc-400 text-sm">メイン画面のランキングをご確認ください</p>
-            <div class="rounded border p-5" style="border-color:${color}">
-              <div class="text-xs text-zinc-400">${escapeHtml(
+          <section class="mq-panel p-6 mt-3 text-center space-y-4">
+            <h1 class="text-xl font-bold mq-mincho">最終結果</h1>
+            <p class="text-[color:var(--mq-muted)] text-sm">メイン画面のランキングをご確認ください</p>
+            <div class="rounded border bg-black/30 p-5" style="border-color:${color}">
+              <div class="text-xs text-[color:var(--mq-muted)]">${escapeHtml(
                 store.team.name
               )} の最終スコア</div>
-              <div class="text-4xl font-bold mt-2">${store.team.score || 0} 点</div>
+              <div class="mt-2"><span class="mq-serif mq-gold-text text-4xl font-bold">${store.team.score || 0}</span> <span class="text-sm">点</span></div>
             </div>
           </section>`;
       }
@@ -564,8 +680,8 @@
         if (!timer) return;
         const remaining = remainingSec();
         timer.textContent = `${remaining}s`;
-        timer.className = `text-2xl font-bold ${
-          remaining <= 5 ? "text-rose-400" : "text-zinc-100"
+        timer.className = `mq-serif text-2xl font-bold ${
+          remaining <= 5 ? "text-rose-400" : "mq-gold-text"
         }`;
         if (!store.answer) {
           debug(`投票中 残${remaining}s answer=${!!store.answer} submitting=${store.submitting}`);
