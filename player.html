@@ -408,16 +408,29 @@ body {
           </header>`;
       }
 
+      let votingRenderKey = null;
       function render() {
         if (!store.team || !store.state) return;
         const savedRep = localStorage.getItem(repKey);
         if (!savedRep) {
+          votingRenderKey = null;
           renderRepForm();
           return;
         }
         const status = store.state.status;
-        if (status === "voting") renderVoting(savedRep);
-        else if (status === "result") renderResult(savedRep);
+        if (status === "voting") {
+          // 同じ問題の投票中は全再描画せず選択状態のみ更新（動画 iframe を壊さないため）
+          const key = `${store.state.currentQuizId || ""}:${store.quiz ? "q" : "l"}`;
+          if (key === votingRenderKey && document.getElementById("choices")) {
+            updateVotingSelection();
+            return;
+          }
+          votingRenderKey = key;
+          renderVoting(savedRep);
+          return;
+        }
+        votingRenderKey = null;
+        if (status === "result") renderResult(savedRep);
         else if (status === "final_ranking") renderFinal(savedRep);
         else renderWaiting(savedRep);
       }
@@ -548,20 +561,45 @@ body {
               )
               .join("")}
           </section>
-          ${
-            answered
-              ? `<div class="bg-amber-950/50 border border-amber-500/60 rounded p-3 text-center text-sm text-amber-100">
+          <div id="vote-status">${voteStatusHtml(answered, remaining)}</div>
+        `;
+      }
+
+      function voteStatusHtml(answered, remaining) {
+        if (answered) {
+          return `<div class="bg-amber-950/50 border border-amber-500/60 rounded p-3 text-center text-sm text-amber-100">
                   現在の選択: <strong>${String.fromCharCode(
                     65 + store.answer.choice
                   )}. ${escapeHtml(
-                  quiz.choices[store.answer.choice]
-                )}</strong>${remaining > 0 ? ' <span class="text-xs text-amber-200/80">(時間内は変更OK)</span>' : ""}
-                </div>`
-              : remaining === 0
-              ? `<div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-center text-sm text-[color:var(--mq-muted)]">時間切れ</div>`
-              : ""
-          }
-        `;
+            store.quiz.choices[store.answer.choice]
+          )}</strong>${remaining > 0 ? ' <span class="text-xs text-amber-200/80">(時間内は変更OK)</span>' : ""}
+                </div>`;
+        }
+        if (remaining === 0) {
+          return `<div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-center text-sm text-[color:var(--mq-muted)]">時間切れ</div>`;
+        }
+        return "";
+      }
+
+      function updateVotingSelection() {
+        if (!store.quiz) return;
+        const remaining = remainingSec();
+        const answered = !!store.answer;
+        const locked = remaining === 0;
+        document
+          .querySelectorAll("#choices button[data-choice]")
+          .forEach((btn) => {
+            const i = parseInt(btn.dataset.choice, 10);
+            const selected = answered && store.answer.choice === i;
+            btn.disabled = locked;
+            const inner = btn.querySelector(".mq-hex-inner");
+            if (inner) {
+              inner.classList.toggle("mq-hex-inner--selected", selected);
+              inner.classList.toggle("mq-hex-inner--dim", locked && !selected);
+            }
+          });
+        const statusEl = document.getElementById("vote-status");
+        if (statusEl) statusEl.innerHTML = voteStatusHtml(answered, remaining);
       }
 
       function renderResult(repName) {
