@@ -124,6 +124,19 @@
       .timer-ring {
         transition: stroke-dashoffset 0.4s linear;
       }
+      .mq-typing::after {
+        content: "";
+        display: inline-block;
+        width: 0.08em;
+        height: 1em;
+        margin-left: 0.08em;
+        vertical-align: -0.08em;
+        background: var(--mq-gold-hi);
+        animation: mq-caret 0.7s steps(1) infinite;
+      }
+      @keyframes mq-caret {
+        50% { opacity: 0; }
+      }
     </style>
   </head>
   <body class="min-h-screen">
@@ -258,6 +271,9 @@
           embed.searchParams.set("controls", "1");
           embed.searchParams.set("playsinline", "1");
           embed.searchParams.set("rel", "0");
+          if (window.location.origin.startsWith("http")) {
+            embed.searchParams.set("origin", window.location.origin);
+          }
           const start = parseYouTubeTime(
             url.searchParams.get("start") || url.searchParams.get("t")
           );
@@ -268,13 +284,63 @@
         }
       }
 
+      function googleDriveEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (url.hostname !== "drive.google.com") return null;
+          const match = url.pathname.match(/\/file\/d\/([^/]+)/);
+          const id = match?.[1] || url.searchParams.get("id");
+          return id
+            ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`
+            : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function vimeoEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (!url.hostname.replace(/^www\./, "").endsWith("vimeo.com")) return null;
+          const id = url.pathname
+            .split("/")
+            .filter(Boolean)
+            .find((part) => /^\d+$/.test(part));
+          return id
+            ? `https://player.vimeo.com/video/${id}?autoplay=1&muted=1`
+            : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function directVideoUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (url.hostname.endsWith("dropbox.com")) {
+            url.hostname = "dl.dropboxusercontent.com";
+            url.searchParams.delete("dl");
+            return url.toString();
+          }
+          return rawUrl;
+        } catch {
+          return rawUrl;
+        }
+      }
+
       function videoHtml(rawUrl, className) {
         if (!rawUrl) return "";
         const youtubeUrl = youtubeEmbedUrl(rawUrl);
         if (youtubeUrl) {
           return `<iframe src="${escapeHtml(youtubeUrl)}" class="${className}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
-        return `<video src="${escapeHtml(rawUrl)}" class="${className}" controls autoplay muted playsinline></video>`;
+        const embedUrl = googleDriveEmbedUrl(rawUrl) || vimeoEmbedUrl(rawUrl);
+        if (embedUrl) {
+          return `<iframe src="${escapeHtml(embedUrl)}" class="${className}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        }
+        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="${className}" controls autoplay muted playsinline preload="metadata">
+          この動画URLはブラウザで再生できません。
+        </video>`;
       }
 
       function playerUrl(teamId) {
@@ -284,6 +350,39 @@
       }
 
       let votingRenderKey = null;
+      let questionTypingTimer = null;
+
+      function stopQuestionTyping() {
+        if (questionTypingTimer) clearTimeout(questionTypingTimer);
+        questionTypingTimer = null;
+      }
+
+      function typeQuestion(text) {
+        stopQuestionTyping();
+        const el = document.getElementById("question-text");
+        if (!el) return;
+        const chars = Array.from(String(text || ""));
+        const delay = Math.max(
+          28,
+          Math.min(70, Math.floor(2800 / Math.max(1, chars.length)))
+        );
+        let index = 0;
+        el.textContent = "";
+        el.classList.add("mq-typing");
+        const tick = () => {
+          if (!el.isConnected) return;
+          el.textContent += chars[index] || "";
+          index += 1;
+          if (index < chars.length) {
+            questionTypingTimer = setTimeout(tick, delay);
+          } else {
+            el.classList.remove("mq-typing");
+            questionTypingTimer = null;
+          }
+        };
+        tick();
+      }
+
       function render() {
         if (!state) {
           votingRenderKey = null;
@@ -300,6 +399,7 @@
           return renderVoting();
         }
         votingRenderKey = null;
+        stopQuestionTyping();
         if (state.status === "result") return renderResult();
         if (state.status === "final_ranking") return renderFinal();
         return renderWaiting();
@@ -465,8 +565,8 @@
           </header>
           <section class="flex-1 flex flex-col items-center justify-center gap-6">
             <div class="mq-hex max-w-5xl w-full">
-              <h1 class="mq-hex-inner mq-mincho px-10 py-6 text-3xl md:text-5xl font-bold text-center leading-snug flex items-center justify-center">
-                ${escapeHtml(quiz.question)}
+              <h1 class="mq-hex-inner mq-mincho px-10 py-6 text-3xl md:text-5xl font-bold text-center leading-snug flex items-center justify-center" aria-label="${escapeHtml(quiz.question)}">
+                <span id="question-text"></span>
               </h1>
             </div>
             ${videoHtml(
@@ -514,6 +614,7 @@
             ${answeredChipsHtml(answeredTeamIds)}
           </section>
         `;
+        typeQuestion(quiz.question);
       }
 
       function answeredChipsHtml(answeredTeamIds) {

@@ -26,7 +26,7 @@ admin.html: 管理画面（問題作成、進行コントロール、リセッ�
 
 /artifacts/{appId}/public/data/state/current: 現在の問題番号、ステータス(waiting, voting, result, final_ranking)
 
-/artifacts/{appId}/public/data/quizzes: クイズデータ（問題、選択肢、正解）
+/artifacts/{appId}/public/data/quizzes: クイズデータ（問題、選択肢、正解、配点、解答時間、画像・動画URL）
 
 /artifacts/{appId}/public/data/teams: チーム名、スコア
 

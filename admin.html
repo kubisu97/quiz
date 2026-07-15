@@ -243,7 +243,7 @@
                 <span id="quiz-image-size" class="text-xs text-[var(--mq-muted)]"></span>
               </div>
             </div>
-            <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube または MP4 の直接URL)"
+            <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube・Google Drive・Vimeo・MP4)"
               class="w-full mq-input px-3 py-2 text-sm">
             <div class="grid sm:grid-cols-2 gap-2">
               <input
@@ -296,6 +296,17 @@
                 required
                 class="mq-input px-3 py-2 w-20"
               />
+              <label class="text-[var(--mq-muted)] ml-2">解答時間:</label>
+              <input
+                type="number"
+                name="durationSec"
+                min="5"
+                max="300"
+                value="30"
+                required
+                class="mq-input px-3 py-2 w-20"
+              />
+              <span class="text-[var(--mq-muted)]">秒</span>
               <button
                 type="submit"
                 class="ml-auto mq-btn mq-btn--gold px-4 py-2 font-medium"
@@ -507,6 +518,14 @@
                   <span class="text-xs border border-[var(--mq-gold)] mq-gold-text font-bold rounded px-2 py-0.5">${
                     q.points || 10
                   } 点</span>
+                  <label class="text-xs text-[var(--mq-muted)] flex items-center gap-1">
+                    解答
+                    <input type="number" min="5" max="300"
+                      value="${q.durationSec || Math.round(DURATION_MS / 1000)}"
+                      data-action="duration" data-id="${q.id}"
+                      class="mq-input px-1.5 py-0.5 w-16 text-center">
+                    秒
+                  </label>
                 </div>
                 <div class="text-xs text-[var(--mq-muted)] mt-1 flex flex-wrap gap-x-3">
                   ${q.choices
@@ -569,6 +588,17 @@
           ) {
             await deleteDoc(refs.quiz(e.target.dataset.id));
           }
+        });
+
+      document
+        .getElementById("quiz-list")
+        .addEventListener("change", async (e) => {
+          if (e.target.dataset.action !== "duration") return;
+          const seconds = Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 30));
+          e.target.value = seconds;
+          await updateDoc(refs.quiz(e.target.dataset.id), {
+            durationSec: seconds,
+          });
         });
 
       document
@@ -699,6 +729,10 @@
             choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
             correctIndex: parseInt(fd.get("correctIndex"), 10),
             points: parseInt(fd.get("points"), 10) || 10,
+            durationSec: Math.max(
+              5,
+              Math.min(300, parseInt(fd.get("durationSec"), 10) || 30)
+            ),
             imageUrl: currentImageDataUrl || null,
             videoUrl: fd.get("videoUrl").trim() || null,
             order,
@@ -720,12 +754,16 @@
             return;
           }
           const quiz = quizzes[nextIndex];
+          const durationSec = Math.max(
+            5,
+            Math.min(300, Number(quiz.durationSec) || DURATION_MS / 1000)
+          );
           await updateDoc(stateRef, {
             status: "voting",
             currentQuizId: quiz.id,
             currentQuizIndex: nextIndex,
             votingStartedAt: Date.now(),
-            durationMs: DURATION_MS,
+            durationMs: durationSec * 1000,
           });
         });
 

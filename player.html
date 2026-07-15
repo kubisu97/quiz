@@ -372,8 +372,12 @@ body {
           );
           embed.searchParams.set("autoplay", "1");
           embed.searchParams.set("mute", "1");
+          embed.searchParams.set("controls", "1");
           embed.searchParams.set("playsinline", "1");
           embed.searchParams.set("rel", "0");
+          if (window.location.origin.startsWith("http")) {
+            embed.searchParams.set("origin", window.location.origin);
+          }
           const start = parseYouTubeTime(
             url.searchParams.get("start") || url.searchParams.get("t")
           );
@@ -384,13 +388,63 @@ body {
         }
       }
 
+      function googleDriveEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (url.hostname !== "drive.google.com") return null;
+          const match = url.pathname.match(/\/file\/d\/([^/]+)/);
+          const id = match?.[1] || url.searchParams.get("id");
+          return id
+            ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`
+            : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function vimeoEmbedUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (!url.hostname.replace(/^www\./, "").endsWith("vimeo.com")) return null;
+          const id = url.pathname
+            .split("/")
+            .filter(Boolean)
+            .find((part) => /^\d+$/.test(part));
+          return id
+            ? `https://player.vimeo.com/video/${id}?autoplay=1&muted=1`
+            : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function directVideoUrl(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          if (url.hostname.endsWith("dropbox.com")) {
+            url.hostname = "dl.dropboxusercontent.com";
+            url.searchParams.delete("dl");
+            return url.toString();
+          }
+          return rawUrl;
+        } catch {
+          return rawUrl;
+        }
+      }
+
       function videoHtml(rawUrl) {
         if (!rawUrl) return "";
         const youtubeUrl = youtubeEmbedUrl(rawUrl);
         if (youtubeUrl) {
           return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
-        return `<video src="${escapeHtml(rawUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" controls autoplay muted playsinline></video>`;
+        const embedUrl = googleDriveEmbedUrl(rawUrl) || vimeoEmbedUrl(rawUrl);
+        if (embedUrl) {
+          return `<iframe src="${escapeHtml(embedUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        }
+        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" controls autoplay muted playsinline preload="metadata">
+          この動画URLはブラウザで再生できません。
+        </video>`;
       }
 
       function headerHtml(repName) {
