@@ -5,5 +5,8 @@ node_modules/
 .vscode/
 
 # デザイン検証時のスクリーンショット / Playwright の出力
-*.png
+# クイズ用の画像はリポジトリに置けるよう、検証用の接頭辞だけ無視する
+qz-*.png
+ref-*.png
+page-*.png
 .playwright-mcp/
