@@ -3,236 +3,146 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>管理画面 - ウェディングクイズ</title>
+    <title>管理画面 - Wedding Quiz</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/theme.css" />
     <style>
-      :root {
-        --mq-gold-hi: #f7e39a;
-        --mq-gold: #d4af37;
-        --mq-gold-lo: #8a6a1c;
-        --mq-navy-hi: #1c2f6b;
-        --mq-navy: #0c1740;
-        --mq-navy-lo: #060d28;
-        --mq-ink: #02040f;
-        --mq-text: #f7f3e6;
-        --mq-muted: #a7a4c7;
-      }
-      body {
-        font-family: "Noto Sans JP", sans-serif;
-        color: var(--mq-text);
-        background-color: var(--mq-ink);
-        background-image:
-          radial-gradient(ellipse 90% 60% at 50% 0%, rgba(47, 76, 167, 0.45), transparent 65%),
-          radial-gradient(ellipse 140% 110% at 50% 55%, #12225c 0%, #081233 55%, #02040f 100%);
-        background-attachment: fixed;
-      }
-      .mq-serif { font-family: "Cinzel", "Shippori Mincho B1", serif; letter-spacing: 0.08em; }
-      .mq-mincho { font-family: "Shippori Mincho B1", serif; }
-      .mq-gold-text {
-        background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 55%, var(--mq-gold-lo) 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-      .mq-panel {
-        background: linear-gradient(180deg, rgba(28, 47, 107, 0.5) 0%, rgba(8, 18, 51, 0.92) 100%);
-        border: 1px solid rgba(212, 175, 55, 0.4);
-        border-radius: 0.75rem;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(247, 227, 154, 0.15);
-      }
-      .mq-hex {
-        position: relative;
-        padding: 2px;
-        clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 50%, calc(100% - 26px) 100%, 26px 100%, 0 50%);
-        background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 30%, var(--mq-gold-lo) 65%, var(--mq-gold) 100%);
-      }
-      .mq-hex-inner {
-        width: 100%;
-        height: 100%;
-        clip-path: polygon(25px 0, calc(100% - 25px) 0, 100% 50%, calc(100% - 25px) 100%, 25px 100%, 0 50%);
-        background: linear-gradient(180deg, #1a2b66 0%, #0c1740 50%, #060d28 100%);
-      }
-      .mq-hex-inner--selected {
-        background: linear-gradient(180deg, #ffd98a 0%, #f59e0b 45%, #a85b06 100%);
-        color: #241300;
-      }
-      .mq-hex-inner--correct {
-        background: linear-gradient(180deg, #86efac 0%, #10b981 45%, #047857 100%);
-        color: #04160d;
-        animation: mq-flash 0.9s ease-in-out infinite alternate;
-      }
-      .mq-hex-inner--dim { opacity: 0.35; }
-      @keyframes mq-flash {
-        from { filter: brightness(1); }
-        to { filter: brightness(1.35); }
-      }
-      .mq-hex-letter {
-        font-family: "Cinzel", serif;
-        color: var(--mq-gold-hi);
-        font-weight: 700;
-      }
-      .mq-hex-inner--selected .mq-hex-letter,
-      .mq-hex-inner--correct .mq-hex-letter { color: inherit; }
-      .mq-hexline { position: relative; }
-      .mq-hexline::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 50%;
-        height: 2px;
-        transform: translateY(-1px);
-        background: linear-gradient(90deg, transparent, var(--mq-gold) 12%, var(--mq-gold) 88%, transparent);
-        z-index: 0;
-      }
-      .mq-hexline > .mq-hex { z-index: 1; }
-      .mq-btn {
-        border-radius: 0.5rem;
-        border: 1px solid rgba(212, 175, 55, 0.5);
-        background: linear-gradient(180deg, #1a2b66, #0c1740);
-        color: var(--mq-text);
-        transition: filter 0.15s;
-      }
-      .mq-btn:hover:not(:disabled) { filter: brightness(1.3); }
-      .mq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-      .mq-btn--gold {
-        background: linear-gradient(180deg, var(--mq-gold-hi), var(--mq-gold) 50%, var(--mq-gold-lo));
-        color: #241300;
-        border-color: var(--mq-gold-hi);
-        font-weight: 700;
-      }
-      .mq-btn--danger {
-        background: linear-gradient(180deg, #7f1d1d, #450a0a);
-        border-color: rgba(248, 113, 113, 0.6);
-      }
-      .mq-input {
-        background: rgba(2, 4, 15, 0.6);
-        border: 1px solid rgba(212, 175, 55, 0.35);
-        border-radius: 0.5rem;
-        color: var(--mq-text);
-      }
-      .mq-input:focus {
-        outline: none;
-        border-color: var(--mq-gold);
-        box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
-      }
-      .mq-input::placeholder { color: #8f8cae; }
-
       /* admin.html 固有 */
-      .mq-file::file-selector-button {
+      /* 司会者が本番でスマホから操作するので、押しやすさを優先する */
+      .qz-input {
+        font-size: 16px; /* iOS の自動ズームを防ぐ */
+      }
+      .qz-file::file-selector-button {
         margin-right: 0.75rem;
-        padding: 0.375rem 0.75rem;
-        border-radius: 0.375rem;
-        border: 1px solid rgba(212, 175, 55, 0.5);
-        background: linear-gradient(180deg, #1a2b66, #0c1740);
-        color: var(--mq-gold-hi);
+        padding: 0.4rem 0.75rem;
+        border: 2px solid var(--forest);
+        border-radius: 0;
+        background: var(--cream);
+        color: var(--forest);
+        font-family: var(--font-body);
+        font-weight: 700;
         font-size: 0.75rem;
         cursor: pointer;
       }
-      .mq-file::file-selector-button:hover { filter: brightness(1.3); }
+      .qz-file::file-selector-button:hover {
+        background: var(--pink-soft);
+      }
+      /* 一覧の行 */
+      .qz-row {
+        background: var(--paper);
+        border: 2px solid var(--forest);
+        border-radius: 0;
+      }
     </style>
   </head>
-  <body class="min-h-screen">
+  <body>
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      <header class="flex items-end justify-between border-b border-[rgba(212,175,55,.35)] pb-4">
+      <header class="flex items-end justify-between pb-4" style="border-bottom:2px solid var(--forest-line)">
         <div>
-          <h1 class="text-xl font-bold mq-mincho">
+          <h1 class="qz-jp-head text-xl" style="color:var(--cream)">
             管理画面
-            <span class="mq-serif mq-gold-text text-sm font-bold tracking-[0.25em] ml-2 align-middle">WEDDING QUIZ</span>
+            <span class="qz-label qz-display--pink ml-2 align-middle">WEDDING QUIZ</span>
           </h1>
-          <p id="auth-status" class="text-xs text-[var(--mq-muted)] mt-1">接続中...</p>
+          <p id="auth-status" class="text-xs qz-muted mt-1">接続中...</p>
         </div>
-        <a href="index.html" class="text-sm text-[var(--mq-muted)] hover:text-[var(--mq-gold-hi)]"
+        <a href="index.html" class="text-sm qz-muted hover:text-[var(--coral)]"
           >← トップ</a
         >
       </header>
       <div id="error-slot"></div>
       <div id="app" class="hidden space-y-6">
-        <section class="mq-panel p-5 space-y-4">
-          <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
-            進行コントロール
+        <section class="qz-card p-5 space-y-4">
+          <h2>
+            <span class="qz-label" style="color:var(--coral)">Control</span>
+            <span class="qz-jp-head block text-base mt-0.5">進行コントロール</span>
           </h2>
           <div
             id="status-display"
-            class="bg-black/30 border border-[rgba(212,175,55,.25)] rounded p-3 text-sm space-y-1"
+            class="qz-panel p-3 text-sm space-y-1"
           >
             読み込み中...
           </div>
           <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-2">
             <button
               id="btn-start"
-              class="mq-btn mq-btn--gold px-4 py-2 font-medium text-sm"
+              class="qz-btn qz-btn--primary"
             >
               次の問題スタート
             </button>
             <button
               id="btn-reveal"
-              class="mq-btn px-4 py-2 font-medium text-sm"
+              class="qz-btn"
             >
               正解発表・採点
             </button>
             <button
               id="btn-final"
-              class="mq-btn px-4 py-2 font-medium text-sm"
+              class="qz-btn"
             >
               最終結果表示
             </button>
             <button
               id="btn-reset"
-              class="mq-btn mq-btn--danger px-4 py-2 font-medium text-sm"
+              class="qz-btn qz-btn--danger"
             >
               リセット
             </button>
           </div>
-          <div id="video-controls" class="hidden border-t border-[rgba(212,175,55,.25)] pt-3 space-y-2">
-            <div class="text-xs text-[var(--mq-muted)]">
+          <div id="video-controls" class="hidden pt-3 space-y-2" style="border-top:2px solid var(--forest-line)">
+            <div class="text-xs qz-muted">
               メイン画面の動画コントロール
-              <span id="video-state" class="ml-1 text-[var(--mq-gold-hi)] font-bold"></span>
+              <span id="video-state" class="ml-1 text-[var(--coral)] font-bold"></span>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button id="btn-video-play" class="mq-btn mq-btn--gold px-3 py-2 text-sm font-medium">
+              <button id="btn-video-play" class="qz-btn qz-btn--primary">
                 ▶ 再生
               </button>
-              <button id="btn-video-pause" class="mq-btn px-3 py-2 text-sm font-medium">
+              <button id="btn-video-pause" class="qz-btn">
                 ⏸ 一時停止
               </button>
-              <button id="btn-video-restart" class="mq-btn px-3 py-2 text-sm font-medium">
+              <button id="btn-video-restart" class="qz-btn">
                 ⏮ 頭から再生
               </button>
-              <button id="btn-video-unmute" class="mq-btn px-3 py-2 text-sm font-medium">
+              <button id="btn-video-unmute" class="qz-btn">
                 🔊 音声オン
               </button>
             </div>
-            <p class="text-[10px] text-[var(--mq-muted)] leading-relaxed">
+            <p class="text-[10px] qz-muted leading-relaxed">
               ※ 音声はメイン画面側で一度クリックが必要な場合があります（ブラウザの自動再生制限）。<br>
               ※ YouTube・Google Drive の埋め込みは外部プレイヤーのため制御できません。MP4 の直リンクを推奨します。
             </p>
           </div>
         </section>
 
-        <section class="mq-panel p-5 space-y-4">
+        <section class="qz-card p-5 space-y-4">
           <div class="flex items-center justify-between">
-            <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
-              チーム
+            <h2>
+              <span class="qz-label" style="color:var(--coral)">Teams</span>
+              <span class="qz-jp-head block text-base mt-0.5">チーム</span>
             </h2>
             <div class="flex gap-2">
               <button
                 id="btn-seed-teams"
-                class="mq-btn text-xs px-3 py-1"
+                class="qz-btn" style="font-size:11px;padding:6px 10px"
               >
                 デフォルト 5 チーム作成
               </button>
               <button
                 id="btn-clear-teams"
-                class="mq-btn mq-btn--danger text-xs px-3 py-1"
+                class="qz-btn qz-btn--danger" style="font-size:11px;padding:6px 10px"
               >
                 全チーム削除
               </button>
             </div>
           </div>
-          <p class="text-xs text-[var(--mq-muted)]">
-            参加者はメイン画面の QR を読み取り、<strong class="text-[var(--mq-text)]">チーム名と代表者名を自分で入力</strong>して参加します。ここでの事前登録は任意です（同じチーム名なら合流します）。
+          <p class="text-xs qz-muted">
+            参加者はメイン画面の QR を読み取り、<strong class="">チーム名と代表者名を自分で入力</strong>して参加します。ここでの事前登録は任意です（同じチーム名なら合流します）。
           </p>
           <div id="team-list" class="space-y-2"></div>
           <form id="team-form" class="flex gap-2">
@@ -241,96 +151,97 @@
               name="name"
               placeholder="新しいチーム名"
               required
-              class="flex-1 mq-input px-3 py-2 text-sm"
+              class="qz-input flex-1"
             />
             <button
               type="submit"
-              class="mq-btn mq-btn--gold px-4 py-2 text-sm font-medium"
+              class="qz-btn qz-btn--primary"
             >
               追加
             </button>
           </form>
         </section>
 
-        <section class="mq-panel p-5 space-y-4">
+        <section class="qz-card p-5 space-y-4">
           <div class="flex items-center justify-between flex-wrap gap-2">
-            <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
-              クイズ
+            <h2>
+              <span class="qz-label" style="color:var(--coral)">Quizzes</span>
+              <span class="qz-jp-head block text-base mt-0.5">クイズ</span>
             </h2>
             <div class="flex gap-2">
-              <button id="btn-seed-quizzes" class="mq-btn text-xs px-3 py-1">
+              <button id="btn-seed-quizzes" class="qz-btn" style="font-size:11px;padding:6px 10px">
                 サンプル 11 問を投入
               </button>
-              <button id="btn-clear-quizzes" class="mq-btn mq-btn--danger text-xs px-3 py-1">
+              <button id="btn-clear-quizzes" class="qz-btn qz-btn--danger" style="font-size:11px;padding:6px 10px">
                 全問題削除
               </button>
             </div>
           </div>
           <div id="quiz-list" class="space-y-2"></div>
-          <form id="quiz-form" class="space-y-2 bg-black/30 border border-[rgba(212,175,55,.25)] p-4 rounded">
+          <form id="quiz-form" class="space-y-2 p-4" style="background:var(--pink-soft);border:2px solid var(--pink)">
             <input
               type="text"
               name="question"
               placeholder="問題文 (例: この人は誰でしょう？)"
               required
-              class="w-full mq-input px-3 py-2 text-sm"
+              class="qz-input"
             />
             <div class="flex items-start gap-3 flex-wrap">
               <input type="file" id="quiz-image" accept="image/*"
-                class="text-xs text-[var(--mq-muted)] mq-file">
+                class="qz-file" style="font-size:11px;color:var(--muted)">
               <div id="quiz-image-preview" class="hidden flex items-center gap-2">
-                <img id="quiz-image-preview-img" class="h-16 w-16 object-cover rounded border border-[rgba(212,175,55,.4)]">
+                <img id="quiz-image-preview-img" class="h-16 w-16 object-cover" style="border:2px solid var(--forest)">
                 <button type="button" id="btn-clear-image"
-                  class="mq-btn text-xs px-2 py-1">画像クリア</button>
-                <span id="quiz-image-size" class="text-xs text-[var(--mq-muted)]"></span>
+                  class="qz-btn" style="font-size:10px;padding:4px 8px">画像クリア</button>
+                <span id="quiz-image-size" class="text-xs qz-muted"></span>
               </div>
             </div>
             <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube・Google Drive・Vimeo・MP4)"
-              class="w-full mq-input px-3 py-2 text-sm">
+              class="qz-input">
             <input type="text" name="note" placeholder="進行メモ (任意、司会者用。参加者には表示されません)"
-              class="w-full mq-input px-3 py-2 text-sm">
+              class="qz-input">
             <div class="grid sm:grid-cols-2 gap-2">
               <input
                 type="text"
                 name="choice0"
                 placeholder="選択肢 A"
                 required
-                class="mq-input px-3 py-2 text-sm"
+                class="qz-input"
               />
               <input
                 type="text"
                 name="choice1"
                 placeholder="選択肢 B"
                 required
-                class="mq-input px-3 py-2 text-sm"
+                class="qz-input"
               />
               <input
                 type="text"
                 name="choice2"
                 placeholder="選択肢 C"
                 required
-                class="mq-input px-3 py-2 text-sm"
+                class="qz-input"
               />
               <input
                 type="text"
                 name="choice3"
                 placeholder="選択肢 D"
                 required
-                class="mq-input px-3 py-2 text-sm"
+                class="qz-input"
               />
             </div>
             <div class="flex gap-2 items-center flex-wrap text-sm">
-              <label class="text-[var(--mq-muted)]">正解:</label>
+              <label class="qz-muted">正解:</label>
               <select
                 name="correctIndex"
-                class="mq-input px-3 py-2"
+                class="qz-input"
               >
                 <option value="0">A</option>
                 <option value="1">B</option>
                 <option value="2">C</option>
                 <option value="3">D</option>
               </select>
-              <label class="text-[var(--mq-muted)] ml-2">点数:</label>
+              <label class="qz-muted ml-2">点数:</label>
               <input
                 type="number"
                 name="points"
@@ -338,21 +249,21 @@
                 max="1000"
                 value="10"
                 required
-                class="mq-input px-3 py-2 w-20"
+                class="qz-input" style="width:5rem"
               />
-              <label class="text-[var(--mq-muted)] ml-2">解答時間:</label>
+              <label class="qz-muted ml-2">解答時間:</label>
               <input
                 type="number"
                 name="durationSec"
                 min="5"
                 max="600"
                 placeholder="無制限"
-                class="mq-input px-3 py-2 w-24"
+                class="qz-input" style="width:6rem"
               />
-              <span class="text-[var(--mq-muted)]">秒（空欄=MCが手動締切）</span>
+              <span class="qz-muted">秒（空欄=MCが手動締切）</span>
               <button
                 type="submit"
-                class="ml-auto mq-btn mq-btn--gold px-4 py-2 font-medium"
+                class="qz-btn qz-btn--primary ml-auto"
               >
                 追加
               </button>
@@ -471,7 +382,7 @@
         let timerText = "";
         if (currentState.status === "voting") {
           if (!currentState.durationMs) {
-            timerText = ' / <strong class="text-[var(--mq-gold-hi)]">時間無制限（手動で締切）</strong>';
+            timerText = ' / <strong class="text-[var(--coral)]">時間無制限（手動で締切）</strong>';
           } else if (currentState.votingStartedAt) {
             const elapsed = Date.now() - currentState.votingStartedAt;
             const remaining = Math.max(
@@ -486,7 +397,7 @@
         }
 
         el.innerHTML = `
-          <div>ステータス: <strong class="mq-gold-text font-bold">${label}</strong>${timerText}</div>
+          <div>ステータス: <strong style="color:var(--coral);font-weight:700">${label}</strong>${timerText}</div>
           <div>現在の問題: ${
             quiz
               ? `#${currentState.currentQuizIndex + 1} ${escapeHtml(
@@ -494,7 +405,7 @@
                 )}`
               : "未設定"
           }</div>
-          <div class="text-[var(--mq-muted)]">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
+          <div class="qz-muted">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
         `;
       }
 
@@ -513,30 +424,30 @@
         const list = document.getElementById("team-list");
         if (teams.length === 0) {
           list.innerHTML =
-            '<p class="text-xs text-[var(--mq-muted)]">チーム未登録</p>';
+            '<p class="text-xs qz-muted">チーム未登録</p>';
           return;
         }
         list.innerHTML = teams
           .map((t, i) => {
             const color = TEAM_COLORS[i % TEAM_COLORS.length];
             return `
-            <div class="flex items-center gap-2 bg-black/30 border border-[rgba(212,175,55,.25)] p-2 rounded flex-wrap text-sm">
+            <div class="qz-row flex items-center gap-2 p-2 flex-wrap text-sm">
               <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
-              <input class="flex-1 min-w-[120px] mq-input px-2 py-1"
+              <input class="qz-input flex-1" style="min-width:120px;padding:6px 8px;font-size:14px"
                 value="${escapeHtml(t.name)}" data-action="rename" data-id="${t.id}">
-              <span class="text-[var(--mq-muted)]">スコア <span class="mq-gold-text font-bold">${
+              <span class="qz-muted">スコア <span style="color:var(--coral);font-weight:700">${
                 t.score || 0
               }</span></span>
-              <span class="text-[var(--mq-muted)]">代表 ${
+              <span class="qz-muted">代表 ${
                 t.representative
-                  ? `<span class="text-[var(--mq-text)]">${escapeHtml(
+                  ? `<span class="">${escapeHtml(
                       t.representative
                     )}</span>`
-                  : `<span class="text-[#6b688f]">未登録</span>`
+                  : `<span class="qz-muted">未登録</span>`
               }</span>
-              <button class="mq-btn text-xs px-2 py-1"
+              <button class="qz-btn" style="font-size:10px;padding:4px 8px"
                 data-action="clear-rep" data-id="${t.id}">代表クリア</button>
-              <button class="mq-btn mq-btn--danger text-xs px-2 py-1"
+              <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
                 data-action="delete" data-id="${t.id}">削除</button>
             </div>`;
           })
@@ -547,52 +458,52 @@
         const list = document.getElementById("quiz-list");
         if (quizzes.length === 0) {
           list.innerHTML =
-            '<p class="text-xs text-[var(--mq-muted)]">問題未登録</p>';
+            '<p class="text-xs qz-muted">問題未登録</p>';
           return;
         }
         list.innerHTML = quizzes
           .map(
             (q, i) => `
-          <div class="bg-black/30 border border-[rgba(212,175,55,.25)] p-3 rounded">
+          <div class="qz-row p-3">
             <div class="flex items-start gap-2">
-              <span class="text-xs text-[var(--mq-muted)] font-mono">#${i + 1}</span>
+              <span class="text-xs qz-muted font-mono">#${i + 1}</span>
               ${
                 q.imageUrl
-                  ? `<img src="${q.imageUrl}" class="w-12 h-12 object-cover rounded border border-[rgba(212,175,55,.4)] shrink-0">`
+                  ? `<img src="${q.imageUrl}" class="w-12 h-12 object-cover shrink-0" style="border:2px solid var(--forest)">`
                   : ""
               }
               <div class="flex-1 text-sm">
                 <div class="font-medium flex items-center gap-2 flex-wrap">
                   <span>${escapeHtml(q.question)}</span>
-                  <label class="text-xs text-[var(--mq-muted)] flex items-center gap-1">
+                  <label class="text-xs qz-muted flex items-center gap-1">
                     <input type="number" min="1" max="1000"
                       value="${q.points || 10}"
                       data-action="points" data-id="${q.id}"
-                      class="mq-input px-1.5 py-0.5 w-16 text-center mq-gold-text font-bold">
+                      class="qz-input" style="width:4rem;padding:4px;text-align:center;font-weight:700">
                     点
                   </label>
-                  <label class="text-xs text-[var(--mq-muted)] flex items-center gap-1">
+                  <label class="text-xs qz-muted flex items-center gap-1">
                     解答
                     <input type="number" min="5" max="600"
                       value="${q.durationSec || ""}"
                       placeholder="無制限"
                       data-action="duration" data-id="${q.id}"
-                      class="mq-input px-1.5 py-0.5 w-20 text-center">
+                      class="qz-input" style="width:5rem;padding:4px;text-align:center">
                     秒
                   </label>
                   ${
                     q.durationSec
                       ? ""
-                      : `<span class="text-[10px] text-[var(--mq-gold-hi)] border border-[rgba(212,175,55,.5)] rounded px-1.5 py-0.5">手動締切</span>`
+                      : `<span class="text-[10px] px-1.5 py-0.5 font-bold" style="background:var(--coral);color:#fff">手動締切</span>`
                   }
                 </div>
-                <div class="text-xs text-[var(--mq-muted)] mt-1 flex flex-wrap gap-x-3">
+                <div class="text-xs qz-muted mt-1 flex flex-wrap gap-x-3">
                   ${q.choices
                     .map(
                       (c, idx) =>
                         `<span class="${
                           idx === q.correctIndex
-                            ? "text-emerald-400"
+                            ? "qz-coral"
                             : ""
                         }">${["A", "B", "C", "D"][idx]}. ${escapeHtml(c)}${
                           idx === q.correctIndex ? " ✓" : ""
@@ -601,19 +512,19 @@
                     .join("")}
                   ${
                     q.videoUrl
-                      ? `<span class="text-sky-400">動画あり</span>`
+                      ? `<span class="">動画あり</span>`
                       : ""
                   }
                 </div>
                 ${
                   q.note
-                    ? `<div class="text-[10px] text-[var(--mq-muted)] mt-1 border-l-2 border-[rgba(212,175,55,.4)] pl-2">
+                    ? `<div class="text-[10px] qz-muted mt-1 pl-2" style="border-left:3px solid var(--coral)">
                          ${escapeHtml(q.note)}
                        </div>`
                     : ""
                 }
               </div>
-              <button class="mq-btn mq-btn--danger text-xs px-2 py-1"
+              <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
                 data-action="delete-quiz" data-id="${q.id}">削除</button>
             </div>
           </div>`

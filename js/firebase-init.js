@@ -40,12 +40,13 @@ if (!envError) {
 
 export { app, auth, db };
 
+// 招待状サイトのパレットに合わせたチーム色。深緑の地に載る彩度に抑えている。
 export const TEAM_COLORS = [
-  "#ef4444",
-  "#3b82f6",
-  "#22c55e",
-  "#eab308",
-  "#a855f7",
+  "#ef7044",
+  "#4a7c9e",
+  "#d9a84e",
+  "#7f9e6c",
+  "#a86f9e",
 ];
 export const DURATION_MS = 30000;
 export const SCORE_PER_CORRECT = 10;
@@ -94,15 +95,18 @@ export function escapeHtml(s) {
 
 export function renderSetupError(container, message) {
   container.innerHTML = `
-    <div class="max-w-xl mx-auto mt-16 p-6 bg-zinc-900 border border-rose-500/60 rounded-lg">
-      <h2 class="text-rose-400 font-bold mb-2">接続エラー</h2>
-      <p class="text-sm text-zinc-200 mb-4">${escapeHtml(message)}</p>
-      <details class="text-xs text-zinc-400">
-        <summary class="cursor-pointer select-none">セットアップ手順</summary>
-        <ol class="list-decimal ml-4 mt-2 space-y-1">
-          <li><code class="text-zinc-200">env.example.js</code> を <code class="text-zinc-200">env.js</code> にコピー</li>
+    <div class="qz-card" style="max-width:36rem;margin:4rem auto;padding:1.75rem">
+      <h2 class="qz-display" style="font-size:2.25rem;color:var(--coral)">Error</h2>
+      <p class="qz-jp-head" style="font-size:1rem;margin-top:.5rem">接続エラー</p>
+      <p style="font-size:.875rem;margin:.75rem 0 1rem;line-height:1.7">${escapeHtml(
+        message
+      )}</p>
+      <details style="font-size:.75rem;color:var(--muted)">
+        <summary style="cursor:pointer;user-select:none">セットアップ手順</summary>
+        <ol style="margin:.5rem 0 0 1.25rem;line-height:1.9">
+          <li><code>env.example.js</code> を <code>env.js</code> にコピー</li>
           <li>Firebase Console でプロジェクトを作成し、Web アプリを追加</li>
-          <li>firebaseConfig の値を <code class="text-zinc-200">env.js</code> の <code class="text-zinc-200">FIREBASE_CONFIG</code> に貼り付け</li>
+          <li>firebaseConfig の値を <code>env.js</code> の <code>FIREBASE_CONFIG</code> に貼り付け</li>
           <li>Authentication で「匿名」プロバイダを有効化</li>
           <li>Firestore Database を作成（テストモードで可）</li>
           <li>ページをリロード</li>

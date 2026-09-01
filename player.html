@@ -6,164 +6,45 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>解答者 - ウェディングクイズ</title>
+    <title>解答者 - Wedding Quiz</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/theme.css" />
     <style>
-:root {
-  --mq-gold-hi: #f7e39a;
-  --mq-gold: #d4af37;
-  --mq-gold-lo: #8a6a1c;
-  --mq-navy-hi: #1c2f6b;
-  --mq-navy: #0c1740;
-  --mq-navy-lo: #060d28;
-  --mq-ink: #02040f;
-  --mq-text: #f7f3e6;
-  --mq-muted: #a7a4c7;
-}
-body {
-  font-family: "Noto Sans JP", sans-serif;
-  color: var(--mq-text);
-  background-color: var(--mq-ink);
-  background-image:
-    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(47, 76, 167, 0.45), transparent 65%),
-    radial-gradient(ellipse 140% 110% at 50% 55%, #12225c 0%, #081233 55%, #02040f 100%);
-  background-attachment: fixed;
-}
-.mq-serif { font-family: "Cinzel", "Shippori Mincho B1", serif; letter-spacing: 0.08em; }
-.mq-mincho { font-family: "Shippori Mincho B1", serif; }
-.mq-gold-text {
-  background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 55%, var(--mq-gold-lo) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.mq-panel {
-  background: linear-gradient(180deg, rgba(28, 47, 107, 0.5) 0%, rgba(8, 18, 51, 0.92) 100%);
-  border: 1px solid rgba(212, 175, 55, 0.4);
-  border-radius: 0.75rem;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(247, 227, 154, 0.15);
-}
-.mq-hex {
-  position: relative;
-  padding: 2px;
-  clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 50%, calc(100% - 26px) 100%, 26px 100%, 0 50%);
-  background: linear-gradient(180deg, var(--mq-gold-hi) 0%, var(--mq-gold) 30%, var(--mq-gold-lo) 65%, var(--mq-gold) 100%);
-}
-.mq-hex-inner {
-  width: 100%;
-  height: 100%;
-  clip-path: polygon(25px 0, calc(100% - 25px) 0, 100% 50%, calc(100% - 25px) 100%, 25px 100%, 0 50%);
-  background: linear-gradient(180deg, #1a2b66 0%, #0c1740 50%, #060d28 100%);
-}
-.mq-hex-inner--selected {
-  background: linear-gradient(180deg, #ffd98a 0%, #f59e0b 45%, #a85b06 100%);
-  color: #241300;
-}
-.mq-hex-inner--correct {
-  background: linear-gradient(180deg, #86efac 0%, #10b981 45%, #047857 100%);
-  color: #04160d;
-  animation: mq-flash 0.9s ease-in-out infinite alternate;
-}
-.mq-hex-inner--dim { opacity: 0.35; }
-@keyframes mq-flash {
-  from { filter: brightness(1); }
-  to { filter: brightness(1.35); }
-}
-.mq-hex-letter {
-  font-family: "Cinzel", serif;
-  color: var(--mq-gold-hi);
-  font-weight: 700;
-}
-.mq-hex-inner--selected .mq-hex-letter,
-.mq-hex-inner--correct .mq-hex-letter { color: inherit; }
-.mq-hexline { position: relative; }
-.mq-hexline::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  transform: translateY(-1px);
-  background: linear-gradient(90deg, transparent, var(--mq-gold) 12%, var(--mq-gold) 88%, transparent);
-  z-index: 0;
-}
-.mq-hexline > .mq-hex { z-index: 1; }
-.mq-btn {
-  border-radius: 0.5rem;
-  border: 1px solid rgba(212, 175, 55, 0.5);
-  background: linear-gradient(180deg, #1a2b66, #0c1740);
-  color: var(--mq-text);
-  transition: filter 0.15s;
-}
-.mq-btn:hover:not(:disabled) { filter: brightness(1.3); }
-.mq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.mq-btn--gold {
-  background: linear-gradient(180deg, var(--mq-gold-hi), var(--mq-gold) 50%, var(--mq-gold-lo));
-  color: #241300;
-  border-color: var(--mq-gold-hi);
-  font-weight: 700;
-}
-.mq-btn--danger {
-  background: linear-gradient(180deg, #7f1d1d, #450a0a);
-  border-color: rgba(248, 113, 113, 0.6);
-}
-.mq-input {
-  background: rgba(2, 4, 15, 0.6);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  border-radius: 0.5rem;
-  color: var(--mq-text);
-}
-.mq-input:focus {
-  outline: none;
-  border-color: var(--mq-gold);
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
-}
-.mq-input::placeholder { color: #8f8cae; }
-      .btn-choice {
-        transition: transform 0.08s ease, opacity 0.2s, filter 0.2s;
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-        color: var(--mq-text);
-        cursor: pointer;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-      .btn-choice.mq-hex {
-        display: block;
-        width: 100%;
-        text-align: left;
-      }
-      .btn-choice .mq-hex-inner {
-        min-height: 4.25rem;
-      }
-      .btn-choice:active {
-        transform: scale(0.96);
-        filter: brightness(1.15);
-      }
-      .btn-choice:disabled {
-        cursor: not-allowed;
-      }
+      /* player.html 固有 */
       #debug {
         position: fixed;
-        bottom: 4px;
-        left: 4px;
-        right: 4px;
+        bottom: 0;
+        left: 0;
+        right: 0;
         font-size: 10px;
-        color: #71717a;
-        background: rgba(0, 0, 0, 0.6);
+        color: var(--sage);
+        background: rgba(16, 53, 39, 0.92);
+        border-top: 1px solid var(--forest-line);
         padding: 4px 8px;
-        border-radius: 4px;
-        font-family: monospace;
+        font-family: ui-monospace, monospace;
         pointer-events: none;
         z-index: 50;
       }
+      /* スマホなので選択肢は縦積み。指で押しやすい高さを確保する。 */
+      .qz-choice__body {
+        min-height: 3.25rem;
+        font-size: 1.0625rem;
+        font-weight: 700;
+      }
+      .qz-choice__key {
+        font-size: 1.25rem;
+      }
     </style>
   </head>
-  <body class="min-h-screen">
-    <main id="root" class="max-w-md mx-auto px-4 py-6 space-y-4 min-h-screen">
-      <p class="text-center text-[color:var(--mq-muted)]">接続中...</p>
+  <body>
+    <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
+      <p class="text-center qz-onDark-muted">接続中...</p>
     </main>
     <div id="debug">起動中...</div>
 
@@ -527,13 +408,13 @@ body {
         if (!rawUrl) return "";
         const youtubeUrl = youtubeEmbedUrl(rawUrl);
         if (youtubeUrl) {
-          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
         const embedUrl = googleDriveEmbedUrl(rawUrl) || vimeoEmbedUrl(rawUrl);
         if (embedUrl) {
-          return `<iframe src="${escapeHtml(embedUrl)}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+          return `<iframe src="${escapeHtml(embedUrl)}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
-        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="w-full aspect-video rounded border border-[rgba(212,175,55,0.4)] bg-black" controls autoplay muted playsinline preload="metadata">
+        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" controls autoplay muted playsinline preload="metadata">
           この動画URLはブラウザで再生できません。
         </video>`;
       }
@@ -541,17 +422,93 @@ body {
       function headerHtml(repName) {
         const color = teamColor();
         return `
-          <header class="flex items-center justify-between pt-2 pb-2 border-b border-[rgba(212,175,55,0.35)]">
-            <div class="flex items-center gap-2 text-sm">
-              <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
-              <span class="font-medium mq-mincho">${escapeHtml(store.team.name)}</span>
+          <header class="qz-card qz-card--tight px-4 py-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 shrink-0" style="background-color:${color}"></span>
+                <span class="qz-jp-head text-base truncate">${escapeHtml(
+                  store.team.name
+                )}</span>
+              </div>
+              <div class="text-[11px] qz-muted mt-0.5">
+                代表 <span style="color:var(--ink)">${escapeHtml(repName)}</span>
+              </div>
             </div>
-            <div class="text-xs text-[color:var(--mq-muted)]">
-              代表: <span class="text-[color:var(--mq-text)]">${escapeHtml(repName)}</span>
-              <button id="btn-change-rep" class="ml-2 text-[color:var(--mq-muted)] underline">変更</button>
-              <button id="btn-leave-team" class="ml-2 text-[color:var(--mq-muted)] underline">チーム変更</button>
+            <div class="flex flex-col gap-1 shrink-0">
+              <button id="btn-change-rep" class="text-[10px] underline qz-muted">名前変更</button>
+              <button id="btn-leave-team" class="text-[10px] underline qz-muted">チーム変更</button>
             </div>
           </header>`;
+      }
+
+      function renderJoinForm() {
+        root.innerHTML = `
+          <header class="text-center pt-4 pb-1">
+            <p class="qz-display qz-display--cream" style="font-size:2.75rem">Wedding</p>
+            <p class="qz-display qz-display--pink" style="font-size:2.75rem">Quiz</p>
+            <p class="qz-label qz-onDark-muted mt-2">Team Registration</p>
+          </header>
+          <section class="qz-card p-5 space-y-4">
+            <h1 class="qz-jp-head text-lg">チームを作って参加</h1>
+            <p class="text-xs leading-relaxed qz-muted">
+              チーム名と代表者のお名前を入力してください。<br />
+              同じチーム名がすでにある場合はそのチームに合流します。
+            </p>
+            <form id="join-form" class="space-y-3">
+              <label class="block">
+                <span class="qz-label" style="color:var(--forest);font-size:10px">Team name</span>
+                <input type="text" name="teamName" required minlength="1" maxlength="20"
+                  placeholder="例: さくらテーブル"
+                  class="qz-input mt-1" autocomplete="off" autofocus />
+              </label>
+              <label class="block">
+                <span class="qz-label" style="color:var(--forest);font-size:10px">Your name</span>
+                <input type="text" name="rep" required minlength="1" maxlength="20"
+                  placeholder="例: やまだ"
+                  class="qz-input mt-1" autocomplete="off" />
+              </label>
+              <button type="submit" class="qz-btn qz-btn--primary w-full">
+                このチームで参加する
+              </button>
+            </form>
+          </section>
+          <p class="text-[11px] text-center qz-onDark-muted">
+            ※ 代表者のスマホで回答します
+          </p>
+        `;
+      }
+
+      function renderRepForm() {
+        const existing = store.team.representative;
+        const color = teamColor();
+        root.innerHTML = `
+          <header class="text-center pt-4 pb-1">
+            <p class="qz-display qz-display--cream" style="font-size:2.5rem">Wedding</p>
+            <p class="qz-display qz-display--pink" style="font-size:2.5rem">Quiz</p>
+            <div class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 qz-panel">
+              <span class="w-3 h-3" style="background-color:${color}"></span>
+              <span class="text-sm font-bold">${escapeHtml(store.team.name)}</span>
+            </div>
+          </header>
+          <section class="qz-card p-5 space-y-4">
+            <h1 class="qz-jp-head text-lg">代表者の名前を入力</h1>
+            ${
+              existing
+                ? `<p class="qz-panel--pink text-xs p-3 leading-relaxed">
+                    現在の代表者: <strong>${escapeHtml(existing)}</strong><br />
+                    別の端末が登録済みです。新しい名前で上書きすると代表者が交代します。
+                  </p>`
+                : ""
+            }
+            <form id="rep-form" class="space-y-3">
+              <input type="text" name="rep" required minlength="1" maxlength="20"
+                placeholder="お名前 (例: やまだ)" class="qz-input" autofocus />
+              <button type="submit" class="qz-btn qz-btn--primary w-full">
+                このチームで参加する
+              </button>
+            </form>
+          </section>
+        `;
       }
 
       let votingRenderKey = null;
@@ -573,7 +530,9 @@ body {
         const status = store.state.status;
         if (status === "voting") {
           // 同じ問題の投票中は全再描画せず選択状態のみ更新（動画 iframe を壊さないため）
-          const key = `${store.state.currentQuizId || ""}:${store.quiz ? "q" : "l"}`;
+          const key = `${store.state.currentQuizId || ""}:${
+            store.quiz ? "q" : "l"
+          }`;
           if (key === votingRenderKey && document.getElementById("choices")) {
             updateVotingSelection();
             return;
@@ -588,94 +547,23 @@ body {
         else renderWaiting(savedRep);
       }
 
-      function renderJoinForm() {
-        root.innerHTML = `
-          <header class="pt-6 text-center space-y-2">
-            <div class="mq-serif mq-gold-text text-3xl font-bold">WEDDING QUIZ</div>
-            <p class="text-xs text-[color:var(--mq-muted)] tracking-widest">ウェディングクイズ</p>
-          </header>
-          <section class="mq-panel p-5 mt-5 space-y-4">
-            <h1 class="text-lg font-bold mq-mincho">チームを作って参加</h1>
-            <p class="text-xs text-[color:var(--mq-muted)] leading-relaxed">
-              チーム名と代表者のお名前を入力してください。<br>
-              同じチーム名がすでにある場合はそのチームに合流します。
-            </p>
-            <form id="join-form" class="space-y-3">
-              <label class="block">
-                <span class="text-xs text-[color:var(--mq-muted)]">チーム名</span>
-                <input type="text" name="teamName" required minlength="1" maxlength="20"
-                  placeholder="例: さくらテーブル"
-                  class="mq-input w-full px-3 py-3 text-base mt-1"
-                  autocomplete="off" autofocus>
-              </label>
-              <label class="block">
-                <span class="text-xs text-[color:var(--mq-muted)]">代表者のお名前</span>
-                <input type="text" name="rep" required minlength="1" maxlength="20"
-                  placeholder="例: やまだ"
-                  class="mq-input w-full px-3 py-3 text-base mt-1"
-                  autocomplete="off">
-              </label>
-              <button type="submit" class="mq-btn mq-btn--gold w-full px-4 py-3">
-                このチームで参加する
-              </button>
-            </form>
-          </section>
-          <p class="text-xs text-[color:var(--mq-muted)] text-center">
-            ※ 代表者のスマホで回答します
-          </p>
-        `;
-      }
-
-      function renderRepForm() {
-        const existing = store.team.representative;
-        const color = teamColor();
-        root.innerHTML = `
-          <header class="pt-4 text-center space-y-3">
-            <div class="mq-serif mq-gold-text text-2xl font-bold">WEDDING QUIZ</div>
-            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[rgba(212,175,55,0.4)] bg-[rgba(8,18,51,0.85)]">
-              <span class="w-2.5 h-2.5 rounded-full" style="background-color:${color}"></span>
-              <span class="font-medium mq-mincho">${escapeHtml(store.team.name)}</span>
-            </div>
-          </header>
-          <section class="mq-panel p-5 mt-4 space-y-4">
-            <h1 class="text-lg font-bold mq-mincho">代表者の名前を入力</h1>
-            ${
-              existing
-                ? `<p class="text-xs bg-amber-950/50 border border-amber-600/60 rounded p-3 text-amber-100">
-                    現在の代表者: <strong>${escapeHtml(existing)}</strong><br>
-                    別の端末が登録済みです。新しい名前で上書きすると代表者が交代します。
-                  </p>`
-                : ""
-            }
-            <form id="rep-form" class="space-y-3">
-              <input type="text" name="rep" required minlength="1" maxlength="20"
-                placeholder="お名前 (例: やまだ)"
-                class="mq-input w-full px-3 py-3 text-base"
-                autofocus>
-              <button type="submit"
-                class="mq-btn mq-btn--gold w-full px-4 py-3">
-                このチームで参加する
-              </button>
-            </form>
-          </section>
-          <p class="text-xs text-[color:var(--mq-muted)] text-center">
-            ※ 代表者のスマホで回答します。変更は司会者に依頼してください。
-          </p>
-        `;
-      }
-
       function renderWaiting(repName) {
         root.innerHTML =
           headerHtml(repName) +
-          `<section class="mq-panel p-6 mt-4 text-center space-y-3">
-            <h1 class="text-lg font-bold mq-mincho">次の問題を待っています</h1>
-            <p class="text-[color:var(--mq-muted)] text-sm">
-              メイン画面で問題が出るとここに回答ボタンが表示されます。
+          `<section class="qz-card p-6 text-center space-y-4">
+            <p class="qz-display" style="font-size:2.25rem">Stand by</p>
+            <h1 class="qz-jp-head text-base">次の問題を待っています</h1>
+            <p class="text-xs qz-muted leading-relaxed">
+              メイン画面で問題が出ると<br />ここに回答ボタンが表示されます
             </p>
-            <div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-sm">
-              現在のスコア: <span class="mq-serif mq-gold-text text-xl font-bold">${
-                store.team.score || 0
-              }</span> 点
+            <div class="qz-panel--pink p-4">
+              <div class="qz-label" style="color:var(--forest);font-size:10px">Your score</div>
+              <div class="mt-1">
+                <span class="qz-display" style="font-size:2.5rem">${
+                  store.team.score || 0
+                }</span>
+                <span class="text-xs qz-muted ml-1">点</span>
+              </div>
             </div>
           </section>`;
       }
@@ -696,11 +584,15 @@ body {
         );
       }
 
+      function timerLabel(remaining) {
+        return remaining === Infinity ? "受付中" : String(remaining);
+      }
+
       function renderVoting(repName) {
         if (!store.quiz) {
           root.innerHTML =
             headerHtml(repName) +
-            `<section class="mq-panel p-6 mt-4 text-center text-[color:var(--mq-muted)]">
+            `<section class="qz-card p-6 text-center qz-muted text-sm">
               問題を読み込み中...
             </section>`;
           return;
@@ -713,50 +605,47 @@ body {
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="mq-panel p-4 mt-3 space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-[color:var(--mq-muted)]">
-                問題 ${(store.state.currentQuizIndex ?? 0) + 1}
+          <section class="qz-card p-4 space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <span class="qz-label" style="color:var(--forest);font-size:10px">
+                Q${(store.state.currentQuizIndex ?? 0) + 1}
               </span>
               <div class="flex items-center gap-2">
-                <span class="bg-black/30 border border-[rgba(212,175,55,0.5)] rounded-full px-2.5 py-0.5 text-xs font-bold"><span class="mq-gold-text">${quiz.points || 10} 点</span></span>
-                <span id="timer" class="mq-serif text-2xl font-bold ${
-                  remaining <= 5 ? "text-rose-400" : "mq-gold-text"
-                }">${remaining === Infinity ? "受付中" : `${remaining}s`}</span>
+                <span class="text-[11px] font-bold px-2 py-0.5"
+                  style="background:var(--forest);color:var(--cream)">${
+                    quiz.points || 10
+                  } 点</span>
+                <span id="timer" class="qz-display ${
+                  remaining !== Infinity && remaining <= 5
+                    ? "qz-display--coral"
+                    : ""
+                }" style="font-size:1.75rem">${timerLabel(remaining)}</span>
               </div>
             </div>
-            <h1 class="text-lg font-bold leading-snug mq-mincho">${escapeHtml(
+            <h1 class="qz-jp-head text-lg leading-snug">${escapeHtml(
               quiz.question
             )}</h1>
             ${videoHtml(quiz.videoUrl)}
             ${
               quiz.imageUrl
-                ? `<img src="${quiz.imageUrl}" class="w-full max-h-64 object-contain rounded border border-[rgba(212,175,55,0.4)]">`
+                ? `<img src="${quiz.imageUrl}" class="w-full max-h-72 object-contain" style="border:2px solid var(--forest)" />`
                 : ""
             }
           </section>
-          <section id="choices" class="grid grid-cols-1 gap-3 mt-3">
+          <section id="choices" class="grid grid-cols-1 gap-3">
             ${quiz.choices
-              .map(
-                (c, i) => {
-                  const selected = answered && store.answer.choice === i;
-                  const dim = locked && !selected;
-                  return `
-              <button type="button"
-                class="btn-choice mq-hex"
-                data-choice="${i}"
-                ${locked ? "disabled" : ""}>
-                <div class="mq-hex-inner ${
-                  selected ? "mq-hex-inner--selected" : ""
-                }${dim ? " mq-hex-inner--dim" : ""} flex items-center gap-3 px-9 py-4 font-bold text-lg">
-                  <span class="mq-hex-letter text-xl shrink-0">${
-                    String.fromCharCode(65 + i)
-                  }:</span>
-                  <span class="flex-1">${escapeHtml(c)}</span>
-                </div>
+              .map((c, i) => {
+                const selected = answered && store.answer.choice === i;
+                const dim = locked && !selected;
+                return `
+              <button type="button" class="qz-choice${
+                selected ? " qz-choice--selected" : ""
+              }${dim ? " qz-choice--dim" : ""}"
+                data-choice="${i}" ${locked ? "disabled" : ""}>
+                <span class="qz-choice__key">${String.fromCharCode(65 + i)}</span>
+                <span class="qz-choice__body">${escapeHtml(c)}</span>
               </button>`;
-                }
-              )
+              })
               .join("")}
           </section>
           <div id="vote-status">${voteStatusHtml(answered, remaining)}</div>
@@ -765,16 +654,21 @@ body {
 
       function voteStatusHtml(answered, remaining) {
         if (answered) {
-          return `<div class="bg-amber-950/50 border border-amber-500/60 rounded p-3 text-center text-sm text-amber-100">
-                  現在の選択: <strong>${String.fromCharCode(
+          return `<div class="qz-panel--pink p-3 text-center text-sm">
+                  現在の選択:
+                  <strong>${String.fromCharCode(
                     65 + store.answer.choice
                   )}. ${escapeHtml(
             store.quiz.choices[store.answer.choice]
-          )}</strong>${remaining > 0 ? ' <span class="text-xs text-amber-200/80">(時間内は変更OK)</span>' : ""}
+          )}</strong>${
+            remaining > 0
+              ? ' <span class="text-[11px] qz-muted">(時間内は変更OK)</span>'
+              : ""
+          }
                 </div>`;
         }
         if (remaining === 0) {
-          return `<div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-center text-sm text-[color:var(--mq-muted)]">時間切れ</div>`;
+          return `<div class="qz-panel p-3 text-center text-sm qz-onDark-muted">時間切れ</div>`;
         }
         return "";
       }
@@ -790,11 +684,8 @@ body {
             const i = parseInt(btn.dataset.choice, 10);
             const selected = answered && store.answer.choice === i;
             btn.disabled = locked;
-            const inner = btn.querySelector(".mq-hex-inner");
-            if (inner) {
-              inner.classList.toggle("mq-hex-inner--selected", selected);
-              inner.classList.toggle("mq-hex-inner--dim", locked && !selected);
-            }
+            btn.classList.toggle("qz-choice--selected", selected);
+            btn.classList.toggle("qz-choice--dim", locked && !selected);
           });
         const statusEl = document.getElementById("vote-status");
         if (statusEl) statusEl.innerHTML = voteStatusHtml(answered, remaining);
@@ -805,47 +696,49 @@ body {
         const answered = store.answer;
         const isCorrect =
           quiz && answered && answered.choice === quiz.correctIndex;
+        const headline = !answered
+          ? "No answer"
+          : isCorrect
+          ? "Correct"
+          : "Wrong";
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="mq-panel p-6 mt-3 text-center space-y-3">
-            <h1 class="mq-mincho text-4xl font-bold ${
-              isCorrect ? "text-[#6ee7b7]" : !answered ? "text-[color:var(--mq-muted)]" : "text-rose-400"
-            }">
-              ${
-                !answered
-                  ? "未回答"
-                  : isCorrect
-                  ? "正解"
-                  : "不正解"
-              }
-            </h1>
+          <section class="qz-card p-6 text-center space-y-3">
+            <p class="qz-display ${
+              isCorrect ? "qz-display--coral" : ""
+            }" style="font-size:2.75rem">${headline}</p>
+            <p class="qz-jp-head text-xl">${
+              !answered ? "未回答" : isCorrect ? "正解！" : "残念…"
+            }</p>
             ${
               quiz
-                ? `<div class="text-sm text-[color:var(--mq-text)]">
-                    正解: <strong><span class="mq-hex-letter">${String.fromCharCode(
+                ? `<div class="qz-panel--pink p-3 text-sm">
+                    正解:
+                    <strong>${String.fromCharCode(
                       65 + quiz.correctIndex
-                    )}</span>. ${escapeHtml(
-                    quiz.choices[quiz.correctIndex]
-                  )}</strong>
+                    )}. ${escapeHtml(quiz.choices[quiz.correctIndex])}</strong>
                   </div>`
                 : ""
             }
             ${
               answered
-                ? `<div class="text-xs text-[color:var(--mq-muted)]">
+                ? `<div class="text-xs qz-muted">
                     あなたの回答: ${String.fromCharCode(
                       65 + answered.choice
-                    )}. ${escapeHtml(
-                    quiz?.choices?.[answered.choice] || ""
-                  )}
+                    )}. ${escapeHtml(quiz?.choices?.[answered.choice] || "")}
                   </div>`
                 : ""
             }
-            <div class="bg-black/30 border border-[rgba(212,175,55,0.25)] rounded p-3 text-sm">
-              現在のスコア: <span class="mq-serif mq-gold-text text-xl font-bold">${
-                store.team.score || 0
-              }</span> 点
+            <hr class="qz-rule qz-rule--pink" />
+            <div>
+              <div class="qz-label qz-muted" style="font-size:10px">Total</div>
+              <div>
+                <span class="qz-display" style="font-size:2.25rem">${
+                  store.team.score || 0
+                }</span>
+                <span class="text-xs qz-muted ml-1">点</span>
+              </div>
             </div>
           </section>`;
       }
@@ -855,14 +748,20 @@ body {
         root.innerHTML =
           headerHtml(repName) +
           `
-          <section class="mq-panel p-6 mt-3 text-center space-y-4">
-            <h1 class="text-xl font-bold mq-mincho">最終結果</h1>
-            <p class="text-[color:var(--mq-muted)] text-sm">メイン画面のランキングをご確認ください</p>
-            <div class="rounded border bg-black/30 p-5" style="border-color:${color}">
-              <div class="text-xs text-[color:var(--mq-muted)]">${escapeHtml(
+          <section class="qz-card p-6 text-center space-y-4">
+            <p class="qz-display" style="font-size:2.5rem">Thank you</p>
+            <h1 class="qz-jp-head text-lg">最終結果</h1>
+            <p class="text-xs qz-muted">メイン画面のランキングをご確認ください</p>
+            <div class="p-5" style="border:2.4px solid ${color};background:var(--pink-soft)">
+              <div class="text-[11px] qz-muted">${escapeHtml(
                 store.team.name
               )} の最終スコア</div>
-              <div class="mt-2"><span class="mq-serif mq-gold-text text-4xl font-bold">${store.team.score || 0}</span> <span class="text-sm">点</span></div>
+              <div class="mt-1">
+                <span class="qz-display" style="font-size:3rem">${
+                  store.team.score || 0
+                }</span>
+                <span class="text-xs qz-muted ml-1">点</span>
+              </div>
             </div>
           </section>`;
       }
@@ -915,10 +814,11 @@ body {
         const timer = document.getElementById("timer");
         if (!timer) return;
         const remaining = remainingSec();
-        timer.textContent = remaining === Infinity ? "受付中" : `${remaining}s`;
-        timer.className = `mq-serif text-2xl font-bold ${
-          remaining <= 5 ? "text-rose-400" : "mq-gold-text"
+        timer.textContent = timerLabel(remaining);
+        timer.className = `qz-display ${
+          remaining !== Infinity && remaining <= 5 ? "qz-display--coral" : ""
         }`;
+        timer.style.fontSize = "1.75rem";
         if (!store.answer) {
           debug(`投票中 残${remaining}s answer=${!!store.answer} submitting=${store.submitting}`);
         }

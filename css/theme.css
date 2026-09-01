@@ -1,0 +1,351 @@
+/* 宴会リアルタイム対抗クイズ — 招待状サイト (tk1129) と揃えたテーマ
+   参照元のデザイントークンをそのまま採用している。
+   要点: 深緑の地にドットパターン / 角丸ゼロ / クリームのカード /
+         深緑の枠線 + ピンクのハードシャドウ / 見出しは Poppins 800 で字間を詰める */
+
+:root {
+  /* 招待状サイトのトークン */
+  --forest: #174c39;
+  --forest-deep: #103527;
+  --forest-line: #2b6349;
+  --pink: #ecd9d1;
+  --pink-soft: #f5e9e4;
+  --coral: #ef7044;
+  --coral-deep: #d8623f;
+  --sage: #c6cec9;
+  --sage-soft: #dde2de;
+  --cream: #fffaf0;
+  --ink: #333333;
+  --muted: #9c9c9c;
+  --paper: #ffffff;
+  --line: #d9d9d9;
+
+  --font-body: "Noto Sans JP", sans-serif;
+  --font-display: "Noto Serif JP", serif;
+  --font-accent: "Poppins", sans-serif;
+
+  /* 参照元は角丸をほぼ使わない。効かせたい所だけ 4px。 */
+  --radius-xs: 4px;
+  --radius-pill: 40px;
+  --motion: 350ms;
+
+  --shadow-soft: 0 8px 24px rgba(51, 41, 38, 0.08);
+  --shadow: 0 18px 48px rgba(51, 41, 38, 0.12);
+
+  /* チーム識別色。深緑の地に載るよう彩度を落としている */
+  --team-1: #ef7044;
+  --team-2: #4a7c9e;
+  --team-3: #d9a84e;
+  --team-4: #7f9e6c;
+  --team-5: #a86f9e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background-color: var(--forest);
+  /* 参照元と同じ 6px 間隔の二重ドット */
+  background-image: radial-gradient(
+      rgba(255, 255, 255, 0.1) 0.7px,
+      transparent 0.8px
+    ),
+    radial-gradient(rgba(0, 0, 0, 0.14) 0.7px, transparent 0.8px);
+  background-size: 6px 6px, 6px 6px;
+  background-position: 0 0, 3px 3px;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- 見出し ------------------------------------------------------------ */
+/* 参照元の H2 は Poppins 800 / letter-spacing -5.5% / 深緑。
+   サイズだけ用途別に振り分ける。 */
+.qz-display {
+  font-family: var(--font-accent);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  color: var(--forest);
+  margin: 0;
+}
+.qz-display--cream {
+  color: var(--cream);
+}
+.qz-display--pink {
+  color: var(--pink);
+}
+.qz-display--coral {
+  color: var(--coral);
+}
+
+.qz-jp-head {
+  font-family: var(--font-body);
+  font-weight: 900;
+  color: var(--forest);
+  margin: 0;
+}
+
+.qz-serif {
+  font-family: var(--font-display);
+}
+
+/* ラベル: Poppins 700 の小さな英字。参照元のナビ由来 */
+.qz-label {
+  font-family: var(--font-accent);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---- カード ------------------------------------------------------------ */
+/* 参照元のサイドバー: クリーム地 / 深緑 2.4px 枠 / ピンクのハードシャドウ */
+.qz-card {
+  background: var(--cream);
+  border: 2.4px solid var(--forest);
+  border-radius: 0;
+  box-shadow: 12px 12px 0 0 var(--pink);
+  color: var(--ink);
+}
+.qz-card--flat {
+  box-shadow: none;
+}
+.qz-card--tight {
+  box-shadow: 6px 6px 0 0 var(--pink);
+}
+
+/* 深緑地の上に置く沈んだ面。クリームを使いたくない箇所用 */
+.qz-panel {
+  background: var(--forest-deep);
+  border: 2px solid var(--forest-line);
+  border-radius: 0;
+  color: var(--cream);
+}
+
+.qz-panel--pink {
+  background: var(--pink-soft);
+  border: 2px solid var(--pink);
+  color: var(--ink);
+}
+
+/* ---- ボタン ------------------------------------------------------------ */
+.qz-btn {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 14px;
+  border: 2px solid var(--forest);
+  border-radius: 0;
+  background: var(--cream);
+  color: var(--forest);
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: transform var(--motion), box-shadow var(--motion),
+    background var(--motion), color var(--motion);
+  box-shadow: 4px 4px 0 0 var(--forest);
+}
+.qz-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 var(--forest);
+}
+.qz-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--forest);
+}
+.qz-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.qz-btn--primary {
+  background: var(--coral);
+  border-color: var(--coral-deep);
+  color: #fff;
+  box-shadow: 4px 4px 0 0 var(--coral-deep);
+}
+.qz-btn--primary:hover:not(:disabled) {
+  box-shadow: 6px 6px 0 0 var(--coral-deep);
+}
+.qz-btn--primary:active:not(:disabled) {
+  box-shadow: 1px 1px 0 0 var(--coral-deep);
+}
+
+.qz-btn--ghost {
+  background: transparent;
+  color: var(--cream);
+  border-color: var(--sage);
+  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 0.25);
+}
+.qz-btn--ghost:hover:not(:disabled) {
+  box-shadow: 6px 6px 0 0 rgba(0, 0, 0, 0.25);
+}
+
+.qz-btn--danger {
+  background: #fff;
+  border-color: #b4472c;
+  color: #b4472c;
+  box-shadow: 4px 4px 0 0 #b4472c;
+}
+.qz-btn--danger:hover:not(:disabled) {
+  box-shadow: 6px 6px 0 0 #b4472c;
+}
+
+/* ---- フォーム ---------------------------------------------------------- */
+.qz-input {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--forest);
+  border-radius: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+.qz-input::placeholder {
+  color: var(--muted);
+}
+.qz-input:focus {
+  outline: none;
+  border-color: var(--coral);
+  box-shadow: 3px 3px 0 0 var(--coral);
+}
+
+/* 深緑地に直接置く入力欄 */
+.qz-input--onDark {
+  background: var(--paper);
+}
+
+/* ---- 選択肢 ------------------------------------------------------------ */
+/* ミリオネア風の六角形はやめ、参照元に合わせた角のない矩形にする。
+   左端に A/B/C/D のコーラルのブロックを立てて識別する。 */
+.qz-choice {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  text-align: left;
+  background: var(--cream);
+  border: 2.4px solid var(--forest);
+  border-radius: 0;
+  box-shadow: 5px 5px 0 0 var(--pink);
+  color: var(--ink);
+  overflow: hidden;
+  transition: transform var(--motion), box-shadow var(--motion);
+}
+
+/* main.html の出題中はメディアを主役にしたいので、選択肢を一段落ち着かせる。
+   player.html ではタップ対象なのでクリームのままにする。 */
+.qz-choice--calm {
+  background: var(--sage-soft);
+  box-shadow: 5px 5px 0 0 rgba(0, 0, 0, 0.28);
+}
+.qz-choice__key {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  padding: 0 0.85rem;
+  background: var(--forest);
+  color: var(--cream);
+  font-family: var(--font-accent);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.qz-choice__body {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  font-weight: 500;
+  min-width: 0;
+}
+
+/* 解答者が選んだ状態 */
+.qz-choice--selected {
+  background: var(--coral);
+  border-color: var(--coral-deep);
+  box-shadow: 5px 5px 0 0 var(--coral-deep);
+  color: #fff;
+}
+.qz-choice--selected .qz-choice__key {
+  background: var(--coral-deep);
+  color: #fff;
+}
+
+/* 正解 */
+.qz-choice--correct {
+  background: var(--forest);
+  border-color: var(--cream);
+  box-shadow: 5px 5px 0 0 var(--pink);
+  color: var(--cream);
+  animation: qz-pulse 1s ease-in-out infinite alternate;
+}
+.qz-choice--correct .qz-choice__key {
+  background: var(--coral);
+  color: #fff;
+}
+@keyframes qz-pulse {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.35);
+  }
+}
+
+.qz-choice--dim {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+/* タップ可能な選択肢 (player) */
+button.qz-choice {
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button.qz-choice:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--pink);
+}
+button.qz-choice:disabled {
+  cursor: not-allowed;
+}
+
+/* ---- 区切り ------------------------------------------------------------ */
+.qz-rule {
+  height: 2px;
+  background: var(--forest-line);
+  border: 0;
+  margin: 0;
+}
+.qz-rule--pink {
+  background: var(--pink);
+}
+
+/* ---- ユーティリティ ---------------------------------------------------- */
+.qz-cream {
+  color: var(--cream);
+}
+.qz-muted {
+  color: var(--muted);
+}
+.qz-onDark-muted {
+  color: var(--sage);
+}
+.qz-coral {
+  color: var(--coral);
+}
