@@ -139,6 +139,21 @@
         transform-origin: center center;
         width: 100%;
       }
+      /* 動画は高さ基準で最大化する。16:9 なので高さ*16/9 が幅の上限。 */
+      .mq-media-video { max-width: calc(64vh * 16 / 9); }
+
+      /* タイプライター中に高さが変わるとレイアウトが跳ねるので、
+         完成後の文字列を透明で重ねて先に場所を確保しておく。 */
+      .mq-type-wrap {
+        position: relative;
+        display: inline-block;
+        text-align: center;
+      }
+      .mq-type-ghost { visibility: hidden; }
+      .mq-type-live {
+        position: absolute;
+        inset: 0;
+      }
       .mq-typing::after {
         content: "";
         display: inline-block;
@@ -458,30 +473,43 @@
         questionTypingTimer = null;
       }
 
+      // クイズ番組風に1文字ずつ流す。句読点で一拍置くと読み上げのリズムに近づく。
       function typeQuestion(text) {
         stopQuestionTyping();
         const el = document.getElementById("question-text");
         if (!el) return;
         const chars = Array.from(String(text || ""));
-        const delay = Math.max(
-          28,
-          Math.min(70, Math.floor(2800 / Math.max(1, chars.length)))
+        // 長文でも間延びしないよう、全体で 3.5〜5 秒に収まる速度を選ぶ
+        const base = Math.max(
+          45,
+          Math.min(110, Math.floor(4200 / Math.max(1, chars.length)))
         );
         let index = 0;
         el.textContent = "";
         el.classList.add("mq-typing");
         const tick = () => {
-          if (!el.isConnected) return;
-          el.textContent += chars[index] || "";
+          if (!el.isConnected) {
+            questionTypingTimer = null;
+            return;
+          }
+          const ch = chars[index] ?? "";
+          el.textContent += ch;
           index += 1;
           if (index < chars.length) {
-            questionTypingTimer = setTimeout(tick, delay);
+            // 句読点・記号のあとは長めに止めて「読ませる」
+            const pause = /[、。，,！!？?：:]/.test(ch)
+              ? base * 6
+              : /[「」『』（）()]/.test(ch)
+              ? base * 2
+              : base;
+            questionTypingTimer = setTimeout(tick, pause);
           } else {
             el.classList.remove("mq-typing");
             questionTypingTimer = null;
           }
         };
-        tick();
+        // 画面が切り替わった直後に少し溜めてから流し始める
+        questionTypingTimer = setTimeout(tick, 320);
       }
 
       function render() {
@@ -676,7 +704,8 @@
           ? "#fbbf24"
           : "#d4af37";
 
-        // タイマーはヘッダー右に置き、縦積みを減らして1画面に収める
+        // 上: 問題文＋タイマー / 中: メディアを1カラムで大きく
+        // 下: 選択肢と回答状況を2カラム
         root.innerHTML = `
           <header class="shrink-0 flex items-center gap-5">
             <div class="flex-1 min-w-0">
@@ -690,9 +719,14 @@
               </div>
               <div class="mq-hex w-full">
                 <h1 class="mq-hex-inner mq-mincho px-8 py-4 ${
-                  hasMedia ? "text-xl md:text-3xl" : "text-2xl md:text-4xl"
-                } font-bold text-center leading-snug flex items-center justify-center" aria-label="${escapeHtml(quiz.question)}">
-                  <span id="question-text"></span>
+                  hasMedia ? "text-xl md:text-2xl" : "text-2xl md:text-4xl"
+                } font-bold text-center leading-snug flex items-center justify-center">
+                  <span class="mq-type-wrap">
+                    <span class="mq-type-ghost" aria-hidden="true">${escapeHtml(
+                      quiz.question
+                    )}</span>
+                    <span id="question-text" class="mq-type-live"></span>
+                  </span>
                 </h1>
               </div>
             </div>
@@ -717,65 +751,85 @@
           </header>
           <div class="mq-fit mt-3">
             <div class="mq-fit-inner flex flex-col items-center gap-4">
-              ${videoHtml(
-                quiz.videoUrl,
-                "w-full max-w-3xl aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
-              )}
               ${
-                quiz.imageUrl
-                  ? `<img src="${quiz.imageUrl}" class="max-h-[38vh] rounded-lg border border-[rgba(212,175,55,.4)] object-contain">`
+                hasMedia
+                  ? `<div class="w-full flex flex-col items-center gap-3">
+                      ${videoHtml(
+                        quiz.videoUrl,
+                        "mq-media-video w-full aspect-video rounded-lg border-2 border-[rgba(212,175,55,.5)] bg-black shadow-[0_0_32px_rgba(0,0,0,.6)]"
+                      )}
+                      ${
+                        quiz.imageUrl
+                          ? `<img src="${quiz.imageUrl}" class="max-h-[62vh] w-auto max-w-full rounded-lg border-2 border-[rgba(212,175,55,.5)] object-contain shadow-[0_0_32px_rgba(0,0,0,.6)]">`
+                          : ""
+                      }
+                    </div>`
                   : ""
               }
-              <div class="grid grid-cols-2 gap-x-6 gap-y-3 max-w-5xl w-full">
-                ${quiz.choices
-                  .map(
-                    (c, i) => `
-                  <div class="mq-hexline">
-                    <div class="mq-hex">
-                      <div class="mq-hex-inner px-9 py-4 ${
-                        hasMedia ? "text-lg md:text-xl" : "text-xl md:text-2xl"
-                      } font-medium flex items-center gap-3">
-                        <span class="mq-hex-letter text-xl md:text-2xl shrink-0">${String.fromCharCode(
-                          65 + i
-                        )}:</span>
-                        <span>${escapeHtml(c)}</span>
+              <div class="w-full grid ${
+                hasMedia ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_auto]"
+              } gap-5 items-start">
+                <div class="grid grid-cols-2 gap-x-5 gap-y-3 min-w-0">
+                  ${quiz.choices
+                    .map(
+                      (c, i) => `
+                    <div class="mq-hexline">
+                      <div class="mq-hex">
+                        <div class="mq-hex-inner px-9 py-4 ${
+                          hasMedia ? "text-base md:text-xl" : "text-xl md:text-2xl"
+                        } font-medium flex items-center gap-3">
+                          <span class="mq-hex-letter text-xl md:text-2xl shrink-0">${String.fromCharCode(
+                            65 + i
+                          )}:</span>
+                          <span>${escapeHtml(c)}</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>`
-                  )
-                  .join("")}
+                    </div>`
+                    )
+                    .join("")}
+                </div>
+                <section id="answered-section" class="w-full lg:w-56 shrink-0">
+                  ${answeredChipsHtml(answeredTeamIds)}
+                </section>
               </div>
             </div>
           </div>
-          <section id="answered-section" class="shrink-0 max-w-5xl mx-auto w-full mt-2">
-            ${answeredChipsHtml(answeredTeamIds)}
-          </section>
         `;
         typeQuestion(quiz.question);
         scheduleFit();
         applyVideoState(true);
       }
 
+      // 選択肢の横に縦並びで置くので、狭い幅でも読めるようにする
       function answeredChipsHtml(answeredTeamIds) {
         return `
-            <div class="text-xs text-[color:var(--mq-muted)] mb-2">
-              回答済み ${answeredTeamIds.size} / ${teams.length}
-            </div>
-            <div class="flex flex-wrap gap-2">
-              ${teams
-                .map((t, i) => {
-                  const answered = answeredTeamIds.has(t.id);
-                  const color = teamColor(i);
-                  return `
-                  <div class="px-3 py-1.5 rounded border bg-black/30 text-sm flex items-center gap-2 ${
-                    answered ? "" : "opacity-40"
-                  }"
-                    style="border-color:${color}">
-                    <span class="w-2 h-2 rounded-full" style="background-color:${color}"></span>
-                    ${escapeHtml(t.name)} ${answered ? "✓" : ""}
-                  </div>`;
-                })
-                .join("")}
+            <div class="mq-panel p-3">
+              <div class="text-[10px] text-[color:var(--mq-muted)] tracking-widest mb-2">
+                回答済み <span class="mq-gold-text font-bold text-sm">${
+                  answeredTeamIds.size
+                }</span> / ${teams.length}
+              </div>
+              <div class="flex flex-wrap lg:flex-col gap-1.5">
+                ${teams
+                  .map((t, i) => {
+                    const answered = answeredTeamIds.has(t.id);
+                    const color = teamColor(i);
+                    return `
+                    <div class="px-2 py-1 rounded border bg-black/30 text-xs flex items-center gap-1.5 ${
+                      answered ? "" : "opacity-40"
+                    }"
+                      style="border-color:${color}">
+                      <span class="w-2 h-2 rounded-full shrink-0" style="background-color:${color}"></span>
+                      <span class="truncate flex-1">${escapeHtml(t.name)}</span>
+                      ${
+                        answered
+                          ? '<span class="text-emerald-400 shrink-0">✓</span>'
+                          : ""
+                      }
+                    </div>`;
+                  })
+                  .join("")}
+              </div>
             </div>`;
       }
 
@@ -822,31 +876,35 @@
         const answerByTeam = new Map(answers.map((a) => [a.teamId, a]));
         const hasMedia = !!(quiz.videoUrl || quiz.imageUrl);
 
-        // 左: 問題と選択肢 / 右: 正解チーム・回答一覧・スコア の2カラムで1画面に収める
+        // 出題中と同じ構成: メディアは1カラムで大きく、その下を2カラム
         root.innerHTML = `
           <header class="shrink-0 text-center">
             <p class="mq-serif mq-gold-text text-xs tracking-widest">正解発表 ・ ${
               quiz.points || 10
             } 点</p>
-            <h1 class="mq-mincho text-xl md:text-2xl font-bold mt-0.5 truncate">
+            <h1 class="mq-mincho text-lg md:text-xl font-bold mt-0.5 truncate">
               ${escapeHtml(quiz.question)}
             </h1>
           </header>
           <div class="mq-fit mt-3">
-            <div class="mq-fit-inner grid ${
-              hasMedia ? "lg:grid-cols-2" : "lg:grid-cols-5"
-            } gap-6 items-start">
-              <div class="${hasMedia ? "" : "lg:col-span-3"} space-y-3">
-                ${videoHtml(
-                  quiz.videoUrl,
-                  "w-full aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
-                )}
-                ${
-                  quiz.imageUrl
-                    ? `<img src="${quiz.imageUrl}" class="w-full max-h-[30vh] rounded-lg border border-[rgba(212,175,55,.4)] object-contain">`
-                    : ""
-                }
-                <div class="space-y-2.5">
+            <div class="mq-fit-inner flex flex-col items-center gap-4">
+              ${
+                hasMedia
+                  ? `<div class="w-full flex flex-col items-center gap-3">
+                      ${videoHtml(
+                        quiz.videoUrl,
+                        "mq-media-video w-full aspect-video rounded-lg border-2 border-[rgba(212,175,55,.5)] bg-black shadow-[0_0_32px_rgba(0,0,0,.6)]"
+                      )}
+                      ${
+                        quiz.imageUrl
+                          ? `<img src="${quiz.imageUrl}" class="max-h-[52vh] w-auto max-w-full rounded-lg border-2 border-[rgba(212,175,55,.5)] object-contain shadow-[0_0_32px_rgba(0,0,0,.6)]">`
+                          : ""
+                      }
+                    </div>`
+                  : ""
+              }
+              <div class="w-full grid lg:grid-cols-2 gap-5 items-start">
+                <div class="space-y-2.5 min-w-0">
                   ${quiz.choices
                     .map((c, i) => {
                       const isCorrect = i === correct;
@@ -857,14 +915,16 @@
                             isCorrect
                               ? "mq-hex-inner--correct"
                               : "mq-hex-inner--dim"
-                          } px-9 py-3 text-base md:text-xl font-medium flex items-center gap-3">
+                          } px-9 py-3 ${
+                        hasMedia ? "text-base md:text-lg" : "text-lg md:text-xl"
+                      } font-medium flex items-center gap-3">
                             <span class="mq-hex-letter text-xl md:text-2xl shrink-0">${String.fromCharCode(
                               65 + i
                             )}:</span>
                             <span>${escapeHtml(c)}</span>
                             ${
                               isCorrect
-                                ? '<span class="ml-auto text-xs font-bold">正解</span>'
+                                ? '<span class="ml-auto text-xs font-bold shrink-0">正解</span>'
                                 : ""
                             }
                           </div>
@@ -873,47 +933,47 @@
                     })
                     .join("")}
                 </div>
-              </div>
-              <div class="${hasMedia ? "" : "lg:col-span-2"} space-y-3">
-                ${renderCorrectTeamsBanner(correct, teamById, answerByTeam, quiz)}
-                <div class="mq-panel p-4">
-                  <h2 class="mq-serif mq-gold-text text-xs font-bold uppercase tracking-wide mb-2">
-                    チームの回答
-                  </h2>
-                  <div class="flex flex-wrap gap-2">
-                    ${teams
-                      .map((t, i) => {
-                        const a = answerByTeam.get(t.id);
-                        const color = teamColor(i);
-                        const isCorrect = a?.choice === correct;
-                        return `
-                        <div class="px-2.5 py-1.5 rounded border bg-black/30 text-xs"
-                          style="border-color:${color}">
-                          <div class="flex items-center gap-1.5 text-[color:var(--mq-muted)] text-[10px]">
-                            <span class="w-2 h-2 rounded-full" style="background-color:${color}"></span>
-                            ${escapeHtml(t.name)}
-                          </div>
-                          <div class="mt-0.5">
-                            ${
-                              a
-                                ? `<span class="mq-hex-letter">${String.fromCharCode(
-                                    65 + a.choice
-                                  )}:</span> ${escapeHtml(
-                                    quiz.choices[a.choice]
-                                  )} <span class="${
-                                    isCorrect
-                                      ? "text-emerald-400"
-                                      : "text-rose-400"
-                                  }">${isCorrect ? "✓" : "✗"}</span>`
-                                : "<span class='text-[color:var(--mq-muted)]'>未回答</span>"
-                            }
-                          </div>
-                        </div>`;
-                      })
-                      .join("")}
+                <div class="space-y-3 min-w-0">
+                  ${renderCorrectTeamsBanner(correct, teamById, answerByTeam, quiz)}
+                  <div class="mq-panel p-4">
+                    <h2 class="mq-serif mq-gold-text text-xs font-bold uppercase tracking-wide mb-2">
+                      チームの回答
+                    </h2>
+                    <div class="flex flex-wrap gap-2">
+                      ${teams
+                        .map((t, i) => {
+                          const a = answerByTeam.get(t.id);
+                          const color = teamColor(i);
+                          const isCorrect = a?.choice === correct;
+                          return `
+                          <div class="px-2.5 py-1.5 rounded border bg-black/30 text-xs"
+                            style="border-color:${color}">
+                            <div class="flex items-center gap-1.5 text-[color:var(--mq-muted)] text-[10px]">
+                              <span class="w-2 h-2 rounded-full" style="background-color:${color}"></span>
+                              ${escapeHtml(t.name)}
+                            </div>
+                            <div class="mt-0.5">
+                              ${
+                                a
+                                  ? `<span class="mq-hex-letter">${String.fromCharCode(
+                                      65 + a.choice
+                                    )}:</span> ${escapeHtml(
+                                      quiz.choices[a.choice]
+                                    )} <span class="${
+                                      isCorrect
+                                        ? "text-emerald-400"
+                                        : "text-rose-400"
+                                    }">${isCorrect ? "✓" : "✗"}</span>`
+                                  : "<span class='text-[color:var(--mq-muted)]'>未回答</span>"
+                              }
+                            </div>
+                          </div>`;
+                        })
+                        .join("")}
+                    </div>
                   </div>
+                  ${renderScoreboard()}
                 </div>
-                ${renderScoreboard()}
               </div>
             </div>
           </div>

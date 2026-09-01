@@ -253,9 +253,19 @@
         </section>
 
         <section class="mq-panel p-5 space-y-4">
-          <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
-            クイズ
-          </h2>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
+              クイズ
+            </h2>
+            <div class="flex gap-2">
+              <button id="btn-seed-quizzes" class="mq-btn text-xs px-3 py-1">
+                サンプル 11 問を投入
+              </button>
+              <button id="btn-clear-quizzes" class="mq-btn mq-btn--danger text-xs px-3 py-1">
+                全問題削除
+              </button>
+            </div>
+          </div>
           <div id="quiz-list" class="space-y-2"></div>
           <form id="quiz-form" class="space-y-2 bg-black/30 border border-[rgba(212,175,55,.25)] p-4 rounded">
             <input
@@ -276,6 +286,8 @@
               </div>
             </div>
             <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube・Google Drive・Vimeo・MP4)"
+              class="w-full mq-input px-3 py-2 text-sm">
+            <input type="text" name="note" placeholder="進行メモ (任意、司会者用。参加者には表示されません)"
               class="w-full mq-input px-3 py-2 text-sm">
             <div class="grid sm:grid-cols-2 gap-2">
               <input
@@ -593,6 +605,13 @@
                       : ""
                   }
                 </div>
+                ${
+                  q.note
+                    ? `<div class="text-[10px] text-[var(--mq-muted)] mt-1 border-l-2 border-[rgba(212,175,55,.4)] pl-2">
+                         ${escapeHtml(q.note)}
+                       </div>`
+                    : ""
+                }
               </div>
               <button class="mq-btn mq-btn--danger text-xs px-2 py-1"
                 data-action="delete-quiz" data-id="${q.id}">削除</button>
@@ -724,6 +743,213 @@
           await batch.commit();
         });
 
+      // 当日のクイズシートをそのまま入れたサンプル。
+      // 画像・動画は差し替え前提のサンプルURL。durationSec: null は「MCが手動締切」。
+      const SAMPLE_VIDEO = "https://samplelib.com/mp4/sample-5s.mp4";
+      const sampleImage = (label, bg) =>
+        `https://placehold.co/1200x800/${bg}/f7e39a/png?text=${encodeURIComponent(
+          label
+        )}`;
+
+      const SAMPLE_QUIZZES = [
+        {
+          question: "この中で、新郎・新婦の赤ちゃんの頃（0〜1歳）の写真はどれ？",
+          choices: ["写真A", "写真B", "写真C", "写真D"],
+          correctIndex: 0,
+          points: 10,
+          durationSec: 30,
+          imageUrl: sampleImage("Baby Photo A / B / C / D", "0c1740"),
+          videoUrl: null,
+          note: "画面に4枚の赤ちゃんの写真を並べて提示",
+        },
+        {
+          question:
+            "二人が初めて出会った時、〇〇（新郎/新婦）が相手に感じた本音の第一印象は？",
+          choices: ["好印象", "チャラそう", "怖そう", "特に何も思わなかった"],
+          correctIndex: 1,
+          points: 10,
+          durationSec: 30,
+          imageUrl: null,
+          videoUrl: null,
+          note: "二人のエピソード解説を交えて正解発表",
+        },
+        {
+          question:
+            "【ききポテチ】今テーブルに配られたポテチは、次のうちどの銘柄（味）でしょう？",
+          choices: [
+            "カルビー うすしお",
+            "湖池屋 うすしお",
+            "トップバリュ うすしお",
+            "ヤマザキ チップスター",
+          ],
+          correctIndex: 1,
+          points: 20,
+          durationSec: null,
+          imageUrl: null,
+          videoUrl: null,
+          note: "事前にテーブルへお皿に載せたポテチを配膳。試食があるので手動締切",
+        },
+        {
+          question:
+            "2歳の姪っ子ちゃんにお菓子を並べて「よーいどん！」。真っ先に手にしたのはどれ？",
+          choices: [
+            "ポテトチップス",
+            "キャラメルペロペロキャンディ",
+            "まさかの両手で全部づかみ",
+            "お菓子スルーでカメラへ一直線",
+          ],
+          correctIndex: 2,
+          points: 20,
+          durationSec: 30,
+          imageUrl: null,
+          videoUrl: SAMPLE_VIDEO,
+          note: "走る直前で一時停止し、正解発表で続きを再生（admin の動画コントロールを使う）",
+        },
+        {
+          question:
+            "担当プランナーさんに質問！「打ち合わせ中、一番こだわりが強かった（主導権を握っていた）のは？」",
+          choices: [
+            "実は新郎",
+            "断然新婦",
+            "二人とも同じくらい",
+            "決めきれず毎回持ち越し",
+          ],
+          correctIndex: 1,
+          points: 30,
+          durationSec: 30,
+          imageUrl: null,
+          videoUrl: null,
+          note: "回答後にプランナーさんにマイクを向けて裏話コメントをもらう",
+        },
+        {
+          question: "【ききお茶】今テーブルに配られたお茶は、次のうちどれでしょう？",
+          choices: ["お〜いお茶", "伊右衛門", "綾鷹", "生茶"],
+          correctIndex: 2,
+          points: 20,
+          durationSec: null,
+          imageUrl: null,
+          videoUrl: null,
+          note: "事前にテーブルへ紙コップのお茶を配膳。試飲があるので手動締切",
+        },
+        {
+          question:
+            "担当プランナーさんに質問！「今日ここまでで、一番印象に残っている二人の姿・舞台裏は？」",
+          choices: [
+            "挙式での緊張した顔",
+            "披露宴入場時の最高の笑顔",
+            "衣装の着こなし・ドレス姿",
+            "披露宴直前の裏でのソワソワ感",
+          ],
+          correctIndex: 1,
+          points: 30,
+          durationSec: 30,
+          imageUrl: null,
+          videoUrl: null,
+          note: "同様にプランナーさんから当日舞台裏のリアルな一言をもらう",
+        },
+        {
+          question:
+            "新郎が今から挑戦！「けん玉のもしかめをこれからやります。何回行くでしょう。」",
+          choices: ["30回以下", "31〜50回", "51〜70回", "71回以上"],
+          correctIndex: 1,
+          points: 30,
+          durationSec: null,
+          imageUrl: null,
+          videoUrl: null,
+          note: "その場で新郎が実演！会場全体でカウント。実演後にMCが締切",
+        },
+        {
+          question:
+            "新婦が今から挑戦！「けん玉のもしかめをこれからやります。何回行くでしょう。」",
+          choices: ["30回以下", "31〜50回", "51〜70回", "71回以上"],
+          correctIndex: 0,
+          points: 30,
+          durationSec: null,
+          imageUrl: null,
+          videoUrl: null,
+          note: "新郎新婦の仲良しエピソードとして正解発表",
+        },
+        {
+          question:
+            "新郎新婦が「これだけは絶対守る」と決めた夫婦のルール第1位は？",
+          choices: [
+            "毎日「ありがとう」を言う",
+            "喧嘩した日は一緒に寝る",
+            "どんな時も味方でいる",
+            "毎月1回はデートに行く",
+          ],
+          correctIndex: 2,
+          points: 30,
+          durationSec: 30,
+          imageUrl: null,
+          videoUrl: null,
+          note: "",
+        },
+        {
+          question:
+            "7月から筋トレを始めた新郎ですが、今の体型は4つのうちどれ？！",
+          choices: ["A", "B", "C", "D"],
+          correctIndex: 3,
+          points: 50,
+          durationSec: 30,
+          imageUrl: sampleImage("Body A / B / C / D", "1a2b66"),
+          videoUrl: null,
+          note: "ラスト一発逆転。4枚の体型写真を1枚に並べた画像を用意",
+        },
+      ];
+
+      document
+        .getElementById("btn-seed-quizzes")
+        .addEventListener("click", async () => {
+          if (
+            !confirm(
+              `サンプル ${SAMPLE_QUIZZES.length} 問を追加します。` +
+                (quizzes.length
+                  ? `
+
+既存の ${quizzes.length} 問はそのまま残り、後ろに追加されます。`
+                  : "")
+            )
+          )
+            return;
+          const base = quizzes.length
+            ? Math.max(...quizzes.map((q) => q.order || 0)) + 1
+            : 0;
+          const batch = writeBatch(db);
+          SAMPLE_QUIZZES.forEach((q, i) => {
+            batch.set(doc(refs.quizzes()), {
+              question: q.question,
+              choices: q.choices,
+              correctIndex: q.correctIndex,
+              points: q.points,
+              durationSec: q.durationSec,
+              imageUrl: q.imageUrl,
+              videoUrl: q.videoUrl,
+              note: q.note || null,
+              order: base + i,
+            });
+          });
+          await batch.commit();
+        });
+
+      document
+        .getElementById("btn-clear-quizzes")
+        .addEventListener("click", async () => {
+          if (quizzes.length === 0) return;
+          if (!confirm(`登録済みの ${quizzes.length} 問すべてを削除します。よろしいですか？`))
+            return;
+          const batch = writeBatch(db);
+          quizzes.forEach((q) => batch.delete(refs.quiz(q.id)));
+          batch.update(stateRef, {
+            status: "waiting",
+            currentQuizId: null,
+            currentQuizIndex: -1,
+            votingStartedAt: null,
+            scoredForQuizId: null,
+          });
+          await batch.commit();
+        });
+
       let currentImageDataUrl = null;
 
       async function fileToResizedDataUrl(file, maxSize = 800, quality = 0.8) {
@@ -812,6 +1038,7 @@
             durationSec: parseDurationInput(fd.get("durationSec")),
             imageUrl: currentImageDataUrl || null,
             videoUrl: fd.get("videoUrl").trim() || null,
+            note: fd.get("note").trim() || null,
             order,
           });
           e.target.reset();
