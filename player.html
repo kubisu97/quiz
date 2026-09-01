@@ -680,12 +680,19 @@ body {
           </section>`;
       }
 
+      // durationMs が無い問題は無制限（司会者が手動で締め切る）
+      function isUnlimited() {
+        return !store.state?.durationMs;
+      }
+
+      // 無制限のときは Infinity を返し、時間切れ判定に引っかからないようにする
       function remainingSec() {
+        if (isUnlimited()) return Infinity;
         const elapsed =
           Date.now() - (store.state.votingStartedAt || Date.now());
         return Math.max(
           0,
-          Math.ceil(((store.state.durationMs || 30000) - elapsed) / 1000)
+          Math.ceil((store.state.durationMs - elapsed) / 1000)
         );
       }
 
@@ -715,7 +722,7 @@ body {
                 <span class="bg-black/30 border border-[rgba(212,175,55,0.5)] rounded-full px-2.5 py-0.5 text-xs font-bold"><span class="mq-gold-text">${quiz.points || 10} 点</span></span>
                 <span id="timer" class="mq-serif text-2xl font-bold ${
                   remaining <= 5 ? "text-rose-400" : "mq-gold-text"
-                }">${remaining}s</span>
+                }">${remaining === Infinity ? "受付中" : `${remaining}s`}</span>
               </div>
             </div>
             <h1 class="text-lg font-bold leading-snug mq-mincho">${escapeHtml(
@@ -908,7 +915,7 @@ body {
         const timer = document.getElementById("timer");
         if (!timer) return;
         const remaining = remainingSec();
-        timer.textContent = `${remaining}s`;
+        timer.textContent = remaining === Infinity ? "受付中" : `${remaining}s`;
         timer.className = `mq-serif text-2xl font-bold ${
           remaining <= 5 ? "text-rose-400" : "mq-gold-text"
         }`;

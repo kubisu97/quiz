@@ -185,6 +185,30 @@
               リセット
             </button>
           </div>
+          <div id="video-controls" class="hidden border-t border-[rgba(212,175,55,.25)] pt-3 space-y-2">
+            <div class="text-xs text-[var(--mq-muted)]">
+              メイン画面の動画コントロール
+              <span id="video-state" class="ml-1 text-[var(--mq-gold-hi)] font-bold"></span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button id="btn-video-play" class="mq-btn mq-btn--gold px-3 py-2 text-sm font-medium">
+                ▶ 再生
+              </button>
+              <button id="btn-video-pause" class="mq-btn px-3 py-2 text-sm font-medium">
+                ⏸ 一時停止
+              </button>
+              <button id="btn-video-restart" class="mq-btn px-3 py-2 text-sm font-medium">
+                ⏮ 頭から再生
+              </button>
+              <button id="btn-video-unmute" class="mq-btn px-3 py-2 text-sm font-medium">
+                🔊 音声オン
+              </button>
+            </div>
+            <p class="text-[10px] text-[var(--mq-muted)] leading-relaxed">
+              ※ 音声はメイン画面側で一度クリックが必要な場合があります（ブラウザの自動再生制限）。<br>
+              ※ YouTube・Google Drive の埋め込みは外部プレイヤーのため制御できません。MP4 の直リンクを推奨します。
+            </p>
+          </div>
         </section>
 
         <section class="mq-panel p-5 space-y-4">
@@ -309,12 +333,11 @@
                 type="number"
                 name="durationSec"
                 min="5"
-                max="300"
-                value="30"
-                required
-                class="mq-input px-3 py-2 w-20"
+                max="600"
+                placeholder="無制限"
+                class="mq-input px-3 py-2 w-24"
               />
-              <span class="text-[var(--mq-muted)]">秒</span>
+              <span class="text-[var(--mq-muted)]">秒（空欄=MCが手動締切）</span>
               <button
                 type="submit"
                 class="ml-auto mq-btn mq-btn--gold px-4 py-2 font-medium"
@@ -402,12 +425,14 @@
         currentState = snap.data();
         renderStatus();
         updateControlButtons();
+        renderVideoControls();
       });
       onSnapshot(query(refs.quizzes(), orderBy("order")), (snap) => {
         quizzes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         renderQuizzes();
         renderStatus();
         updateControlButtons();
+        renderVideoControls();
       });
       onSnapshot(query(refs.teams(), orderBy("order")), (snap) => {
         teams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -432,16 +457,20 @@
           }[currentState.status] || currentState.status;
 
         let timerText = "";
-        if (currentState.status === "voting" && currentState.votingStartedAt) {
-          const elapsed = Date.now() - currentState.votingStartedAt;
-          const remaining = Math.max(
-            0,
-            Math.ceil((currentState.durationMs - elapsed) / 1000)
-          );
-          timerText =
-            remaining > 0
-              ? ` / 残り ${remaining} 秒で自動採点`
-              : " / 自動採点中...";
+        if (currentState.status === "voting") {
+          if (!currentState.durationMs) {
+            timerText = ' / <strong class="text-[var(--mq-gold-hi)]">時間無制限（手動で締切）</strong>';
+          } else if (currentState.votingStartedAt) {
+            const elapsed = Date.now() - currentState.votingStartedAt;
+            const remaining = Math.max(
+              0,
+              Math.ceil((currentState.durationMs - elapsed) / 1000)
+            );
+            timerText =
+              remaining > 0
+                ? ` / 残り ${remaining} 秒で自動採点`
+                : " / 自動採点中...";
+          }
         }
 
         el.innerHTML = `
@@ -523,17 +552,27 @@
               <div class="flex-1 text-sm">
                 <div class="font-medium flex items-center gap-2 flex-wrap">
                   <span>${escapeHtml(q.question)}</span>
-                  <span class="text-xs border border-[var(--mq-gold)] mq-gold-text font-bold rounded px-2 py-0.5">${
-                    q.points || 10
-                  } 点</span>
+                  <label class="text-xs text-[var(--mq-muted)] flex items-center gap-1">
+                    <input type="number" min="1" max="1000"
+                      value="${q.points || 10}"
+                      data-action="points" data-id="${q.id}"
+                      class="mq-input px-1.5 py-0.5 w-16 text-center mq-gold-text font-bold">
+                    点
+                  </label>
                   <label class="text-xs text-[var(--mq-muted)] flex items-center gap-1">
                     解答
-                    <input type="number" min="5" max="300"
-                      value="${q.durationSec || Math.round(DURATION_MS / 1000)}"
+                    <input type="number" min="5" max="600"
+                      value="${q.durationSec || ""}"
+                      placeholder="無制限"
                       data-action="duration" data-id="${q.id}"
-                      class="mq-input px-1.5 py-0.5 w-16 text-center">
+                      class="mq-input px-1.5 py-0.5 w-20 text-center">
                     秒
                   </label>
+                  ${
+                    q.durationSec
+                      ? ""
+                      : `<span class="text-[10px] text-[var(--mq-gold-hi)] border border-[rgba(212,175,55,.5)] rounded px-1.5 py-0.5">手動締切</span>`
+                  }
                 </div>
                 <div class="text-xs text-[var(--mq-muted)] mt-1 flex flex-wrap gap-x-3">
                   ${q.choices
@@ -601,12 +640,21 @@
       document
         .getElementById("quiz-list")
         .addEventListener("change", async (e) => {
-          if (e.target.dataset.action !== "duration") return;
-          const seconds = Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 30));
-          e.target.value = seconds;
-          await updateDoc(refs.quiz(e.target.dataset.id), {
-            durationSec: seconds,
-          });
+          const action = e.target.dataset.action;
+          const id = e.target.dataset.id;
+          if (!id) return;
+          if (action === "duration") {
+            const seconds = parseDurationInput(e.target.value);
+            e.target.value = seconds ?? "";
+            await updateDoc(refs.quiz(id), { durationSec: seconds });
+          } else if (action === "points") {
+            const points = Math.max(
+              1,
+              Math.min(1000, parseInt(e.target.value, 10) || 10)
+            );
+            e.target.value = points;
+            await updateDoc(refs.quiz(id), { points });
+          }
         });
 
       document
@@ -761,10 +809,7 @@
             choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
             correctIndex: parseInt(fd.get("correctIndex"), 10),
             points: parseInt(fd.get("points"), 10) || 10,
-            durationSec: Math.max(
-              5,
-              Math.min(300, parseInt(fd.get("durationSec"), 10) || 30)
-            ),
+            durationSec: parseDurationInput(fd.get("durationSec")),
             imageUrl: currentImageDataUrl || null,
             videoUrl: fd.get("videoUrl").trim() || null,
             order,
@@ -772,6 +817,13 @@
           e.target.reset();
           clearQuizImage();
         });
+
+      // 空欄・0・不正値は「無制限（MCが手動で締切）」を意味する null にする。
+      function parseDurationInput(raw) {
+        const n = parseInt(String(raw ?? "").trim(), 10);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        return Math.max(5, Math.min(600, n));
+      }
 
       document
         .getElementById("btn-start")
@@ -786,16 +838,16 @@
             return;
           }
           const quiz = quizzes[nextIndex];
-          const durationSec = Math.max(
-            5,
-            Math.min(300, Number(quiz.durationSec) || DURATION_MS / 1000)
-          );
+          const durationSec = parseDurationInput(quiz.durationSec);
           await updateDoc(stateRef, {
             status: "voting",
             currentQuizId: quiz.id,
             currentQuizIndex: nextIndex,
             votingStartedAt: Date.now(),
-            durationMs: durationSec * 1000,
+            // null = 無制限。タイマーを表示せず自動採点もしない。
+            durationMs: durationSec ? durationSec * 1000 : null,
+            videoPlaying: true,
+            videoCue: Date.now(),
           });
         });
 
@@ -841,9 +893,11 @@
           return;
         }
         if (autoRevealInFlight) return;
+        // durationMs が null（無制限）の問題は自動採点しない
+        if (!currentState.durationMs) return;
         const elapsed =
           Date.now() - (currentState.votingStartedAt || Date.now());
-        if (elapsed < (currentState.durationMs || 30000)) return;
+        if (elapsed < currentState.durationMs) return;
         autoRevealInFlight = true;
         try {
           await doReveal();
@@ -851,6 +905,42 @@
           autoRevealInFlight = false;
         }
       }, 500);
+
+      // 動画コントロール: state に指示を書き、main.html が反映する。
+      // videoCmdAt は「同じボタンを連続で押しても main に届く」ための単調増加の印。
+      async function sendVideoCmd(patch) {
+        await updateDoc(stateRef, { ...patch, videoCmdAt: Date.now() });
+      }
+
+      document
+        .getElementById("btn-video-play")
+        .addEventListener("click", () => sendVideoCmd({ videoPlaying: true }));
+      document
+        .getElementById("btn-video-pause")
+        .addEventListener("click", () => sendVideoCmd({ videoPlaying: false }));
+      document
+        .getElementById("btn-video-restart")
+        .addEventListener("click", () =>
+          sendVideoCmd({ videoPlaying: true, videoSeekTo: 0 })
+        );
+      document
+        .getElementById("btn-video-unmute")
+        .addEventListener("click", () => sendVideoCmd({ videoMuted: false }));
+
+      function renderVideoControls() {
+        const box = document.getElementById("video-controls");
+        if (!currentState) return;
+        const quiz = quizzes.find((q) => q.id === currentState.currentQuizId);
+        const show =
+          !!quiz?.videoUrl &&
+          (currentState.status === "voting" || currentState.status === "result");
+        box.classList.toggle("hidden", !show);
+        if (!show) return;
+        const label = document.getElementById("video-state");
+        label.textContent = `${
+          currentState.videoPlaying === false ? "一時停止中" : "再生中"
+        } / ${currentState.videoMuted === false ? "音声オン" : "ミュート"}`;
+      }
 
       document
         .getElementById("btn-final")
@@ -879,6 +969,9 @@
             currentQuizIndex: -1,
             votingStartedAt: null,
             scoredForQuizId: null,
+            videoPlaying: true,
+            videoMuted: true,
+            videoSeekTo: null,
           });
           await batch.commit();
         });

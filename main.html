@@ -158,9 +158,9 @@
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
       <p class="text-center text-[color:var(--mq-muted)]">接続中...</p>
     </main>
-    <div id="sound-hint" class="fixed bottom-4 right-4 z-50 bg-black/75 border border-[rgba(212,175,55,0.5)] rounded-full px-4 py-2 text-sm text-[color:var(--mq-gold-hi)]">
-      🔇 動画はミュートで自動再生されます。プレイヤーから音声をオンにできます
-    </div>
+    <button id="sound-hint" class="hidden fixed bottom-4 right-4 z-50 bg-black/85 border-2 border-[#d4af37] rounded-full px-5 py-3 text-base font-bold text-[color:var(--mq-gold-hi)] shadow-[0_0_24px_rgba(212,175,55,0.5)] hover:brightness-125">
+      🔊 クリックして音声をオンにする
+    </button>
 
     <script src="env.js"></script>
     <script type="module">
@@ -180,11 +180,23 @@
       } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
       const root = document.getElementById("root");
+      let lastVideoCmdAt = null;
+      let audioUnlocked = false;
 
+      // ブラウザは「ユーザー操作のないページ」での音声再生を拒否する。
+      // 画面のどこかを一度クリック/タップすれば以降は音声を出せる。
       document.addEventListener(
         "pointerdown",
-        () => document.getElementById("sound-hint")?.remove(),
-        { once: true }
+        () => {
+          audioUnlocked = true;
+          const v = document.getElementById("mq-video");
+          if (v && state?.videoMuted === false) {
+            v.muted = false;
+            v.play().catch(() => {});
+          }
+          document.getElementById("sound-hint")?.classList.add("hidden");
+        },
+        true
       );
 
       if (envError) {
@@ -210,6 +222,8 @@
         state = snap.exists() ? snap.data() : null;
         syncAnswersListener();
         render();
+        // 動画の再生/停止/音声は再描画を伴わずに届くこともある
+        applyVideoState(false);
       });
       onSnapshot(query(refs.quizzes(), orderBy("order")), (snap) => {
         quizzes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -353,9 +367,51 @@
         if (embedUrl) {
           return `<iframe src="${escapeHtml(embedUrl)}" class="${className}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
-        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="${className}" controls autoplay muted playsinline preload="metadata">
+        // MP4 直リンクのみ admin から再生/停止/音声を制御できる
+        return `<video id="mq-video" src="${escapeHtml(
+          directVideoUrl(rawUrl)
+        )}" class="${className}" controls autoplay muted playsinline preload="auto">
           この動画URLはブラウザで再生できません。
         </video>`;
+      }
+
+      // admin からの指示を <video> に反映する。
+      // 同じ指示が繰り返し届いても副作用が出ないよう videoCmdAt で新旧を判定する。
+      function applyVideoState(force) {
+        const v = document.getElementById("mq-video");
+        if (!v || !state) return;
+        const cmdAt = state.videoCmdAt || null;
+        const isNewCmd = force || cmdAt !== lastVideoCmdAt;
+        if (!isNewCmd) return;
+        lastVideoCmdAt = cmdAt;
+
+        if (typeof state.videoSeekTo === "number") {
+          try {
+            v.currentTime = state.videoSeekTo;
+          } catch {}
+        }
+        // 音声オンは「一度ユーザー操作があった」ページでのみ通る。
+        // 通らなかった場合は画面のボタンで解除してもらう。
+        const wantSound = state.videoMuted === false;
+        v.muted = !wantSound;
+        if (state.videoPlaying === false) {
+          v.pause();
+        } else {
+          v.play().catch(() => {
+            if (wantSound) {
+              // 音声付き再生を拒否されたらミュートで再生を継続し、案内を出す
+              v.muted = true;
+              v.play().catch(() => {});
+              showSoundHint();
+            }
+          });
+        }
+      }
+
+      function showSoundHint() {
+        if (audioUnlocked) return;
+        const hint = document.getElementById("sound-hint");
+        if (hint) hint.classList.remove("hidden");
       }
 
       // .mq-fit-inner の実寸が親を超えていたら scale で縮小して1画面に収める。
@@ -598,18 +654,27 @@
           root.innerHTML = `<div class="flex-1 flex items-center justify-center"><p class="text-[color:var(--mq-muted)]">問題情報が見つかりません</p></div>`;
           return;
         }
+        // durationMs が無い問題は無制限（司会者が手動で締め切る）
+        const unlimited = !state.durationMs;
         const elapsed = Date.now() - (state.votingStartedAt || Date.now());
-        const duration = state.durationMs || 30000;
-        const remainingMs = Math.max(0, duration - elapsed);
-        const remaining = Math.ceil(remainingMs / 1000);
-        const progress = Math.max(0, Math.min(1, remainingMs / duration));
+        const duration = state.durationMs || 0;
+        const remainingMs = unlimited ? 0 : Math.max(0, duration - elapsed);
+        const remaining = unlimited ? 0 : Math.ceil(remainingMs / 1000);
+        const progress = unlimited
+          ? 1
+          : Math.max(0, Math.min(1, remainingMs / duration));
         const answeredTeamIds = new Set(answers.map((a) => a.teamId));
         const hasMedia = !!(quiz.videoUrl || quiz.imageUrl);
 
         const circumference = 2 * Math.PI * 52;
         const dashOffset = circumference * (1 - progress);
-        const timerColor =
-          remaining <= 5 ? "#f87171" : remaining <= 10 ? "#fbbf24" : "#d4af37";
+        const timerColor = unlimited
+          ? "#d4af37"
+          : remaining <= 5
+          ? "#f87171"
+          : remaining <= 10
+          ? "#fbbf24"
+          : "#d4af37";
 
         // タイマーはヘッダー右に置き、縦積みを減らして1画面に収める
         root.innerHTML = `
@@ -641,8 +706,12 @@
                   stroke-dashoffset="${dashOffset}"
                   class="timer-ring"/>
               </svg>
-              <div class="absolute inset-0 flex items-center justify-center">
-                <span id="timer-num" class="mq-serif text-4xl font-bold" style="color:${timerColor}">${remaining}</span>
+              <div class="absolute inset-0 flex flex-col items-center justify-center text-center leading-tight">
+                ${
+                  unlimited
+                    ? `<span class="mq-mincho text-sm font-bold mq-gold-text">回答<br>受付中</span>`
+                    : `<span id="timer-num" class="mq-serif text-4xl font-bold" style="color:${timerColor}">${remaining}</span>`
+                }
               </div>
             </div>
           </header>
@@ -684,6 +753,7 @@
         `;
         typeQuestion(quiz.question);
         scheduleFit();
+        applyVideoState(true);
       }
 
       function answeredChipsHtml(answeredTeamIds) {
@@ -710,12 +780,21 @@
       }
 
       function updateVotingView() {
+        const section = document.getElementById("answered-section");
+        if (section) {
+          section.innerHTML = answeredChipsHtml(
+            new Set(answers.map((a) => a.teamId))
+          );
+        }
+        applyVideoState(false);
+        if (!state.durationMs) return; // 無制限はカウントダウンしない
+        const duration = state.durationMs;
         const elapsed = Date.now() - (state.votingStartedAt || Date.now());
-        const duration = state.durationMs || 30000;
         const remainingMs = Math.max(0, duration - elapsed);
         const remaining = Math.ceil(remainingMs / 1000);
         const progress = Math.max(0, Math.min(1, remainingMs / duration));
-        const circumference = 2 * Math.PI * 65;
+        // リングの半径は renderVoting の r=52 と一致させる
+        const circumference = 2 * Math.PI * 52;
         const timerColor =
           remaining <= 5 ? "#f87171" : remaining <= 10 ? "#fbbf24" : "#d4af37";
         const num = document.getElementById("timer-num");
@@ -727,12 +806,6 @@
         if (ring) {
           ring.setAttribute("stroke", timerColor);
           ring.setAttribute("stroke-dashoffset", circumference * (1 - progress));
-        }
-        const section = document.getElementById("answered-section");
-        if (section) {
-          section.innerHTML = answeredChipsHtml(
-            new Set(answers.map((a) => a.teamId))
-          );
         }
       }
 
@@ -846,6 +919,7 @@
           </div>
         `;
         scheduleFit();
+        applyVideoState(true);
       }
 
       function renderFinal() {
