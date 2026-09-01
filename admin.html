@@ -192,15 +192,23 @@
             <h2 class="text-xs font-bold mq-serif mq-gold-text uppercase tracking-[0.25em]">
               チーム
             </h2>
-            <button
-              id="btn-seed-teams"
-              class="mq-btn text-xs px-3 py-1"
-            >
-              デフォルト 5 チーム作成
-            </button>
+            <div class="flex gap-2">
+              <button
+                id="btn-seed-teams"
+                class="mq-btn text-xs px-3 py-1"
+              >
+                デフォルト 5 チーム作成
+              </button>
+              <button
+                id="btn-clear-teams"
+                class="mq-btn mq-btn--danger text-xs px-3 py-1"
+              >
+                全チーム削除
+              </button>
+            </div>
           </div>
           <p class="text-xs text-[var(--mq-muted)]">
-            各チームの QR はメイン画面で表示されます。参加者は QR 読み取り後、代表者名を入力してチームを決定します。
+            参加者はメイン画面の QR を読み取り、<strong class="text-[var(--mq-text)]">チーム名と代表者名を自分で入力</strong>して参加します。ここでの事前登録は任意です（同じチーム名なら合流します）。
           </p>
           <div id="team-list" class="space-y-2"></div>
           <form id="team-form" class="flex gap-2">
@@ -641,6 +649,30 @@
               order: base + i,
             });
           }
+          await batch.commit();
+        });
+
+      document
+        .getElementById("btn-clear-teams")
+        .addEventListener("click", async () => {
+          if (teams.length === 0) return;
+          if (
+            !confirm(
+              `参加中の ${teams.length} チームと全回答を削除します。やり直す場合に使ってください。よろしいですか？`
+            )
+          )
+            return;
+          const ansSnap = await getDocs(refs.answers());
+          const batch = writeBatch(db);
+          ansSnap.docs.forEach((d) => batch.delete(d.ref));
+          teams.forEach((t) => batch.delete(refs.team(t.id)));
+          batch.update(stateRef, {
+            status: "waiting",
+            currentQuizId: null,
+            currentQuizIndex: -1,
+            votingStartedAt: null,
+            scoredForQuizId: null,
+          });
           await batch.commit();
         });
 

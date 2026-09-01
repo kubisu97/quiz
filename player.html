@@ -181,12 +181,20 @@ body {
         onSnapshot,
         setDoc,
         updateDoc,
+        addDoc,
+        getDocs,
+        getDoc,
+        query,
+        orderBy,
       } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
       const params = new URLSearchParams(location.search);
-      const teamId = params.get("team");
+      // チームは URL の ?team= か、localStorage に保存した参加履歴で決まる。
+      // どちらも無ければチーム名入力フォームを出して自己登録させる。
+      const JOIN_KEY = "enkai:joinedTeam";
+      let teamId = params.get("team") || localStorage.getItem(JOIN_KEY) || null;
 
       const APP_VERSION = "v2";
       function debug(msg) {
@@ -206,22 +214,6 @@ body {
         throw new Error(envError);
       }
 
-      function showInfo(msg) {
-        root.innerHTML = `
-          <div class="min-h-[70vh] flex items-center justify-center">
-            <div class="mq-panel p-6 text-center max-w-sm">
-              <p class="text-sm text-[color:var(--mq-text)]">${escapeHtml(msg)}</p>
-            </div>
-          </div>`;
-      }
-
-      if (!teamId) {
-        showInfo(
-          "QR コードからアクセスしてください (team パラメータがありません)"
-        );
-        throw new Error("no team param");
-      }
-
       try {
         const user = await ensureSignedIn();
         debug(`認証OK / UID: ${user.uid.slice(0, 6)}`);
@@ -231,7 +223,27 @@ body {
         throw err;
       }
 
-      const repKey = `enkai:team:${teamId}:rep`;
+      let repKey = null;
+      function setTeam(id) {
+        teamId = id;
+        repKey = `enkai:team:${id}:rep`;
+        localStorage.setItem(JOIN_KEY, id);
+      }
+
+      // 保存済みチームが削除・リセット済みなら参加情報を捨ててフォームに戻す。
+      if (teamId) {
+        try {
+          const snap = await getDoc(refs.team(teamId));
+          if (!snap.exists()) {
+            debug(`保存チームが存在しない: ${teamId}`);
+            localStorage.removeItem(JOIN_KEY);
+            teamId = null;
+          }
+        } catch (err) {
+          debug(`チーム確認失敗: ${err.message}`);
+        }
+      }
+      if (teamId) setTeam(teamId);
 
       root.addEventListener("click", (e) => {
         const choiceBtn = e.target.closest("button[data-choice]");
@@ -255,10 +267,49 @@ body {
             localStorage.removeItem(repKey);
             render();
           }
+          return;
+        }
+        if (e.target.id === "btn-leave-team") {
+          if (!confirm("別のチームで参加し直しますか？")) return;
+          if (repKey) localStorage.removeItem(repKey);
+          localStorage.removeItem(JOIN_KEY);
+          if (teamUnsub) {
+            teamUnsub();
+            teamUnsub = null;
+          }
+          store.team = null;
+          teamId = null;
+          repKey = null;
+          syncQuizSubscriptions();
+          renderJoinForm();
         }
       });
 
       root.addEventListener("submit", async (e) => {
+        if (e.target.id === "join-form") {
+          e.preventDefault();
+          const btn = e.target.querySelector("button[type=submit]");
+          const teamName = e.target.teamName.value.trim();
+          const rep = e.target.rep.value.trim();
+          if (!teamName || !rep) return;
+          btn.disabled = true;
+          btn.textContent = "参加中...";
+          debug(`チーム自己登録: ${teamName} / ${rep}`);
+          try {
+            const id = await joinTeam(teamName, rep);
+            setTeam(id);
+            localStorage.setItem(repKey, rep);
+            startTeamSubscription();
+            syncQuizSubscriptions();
+            debug(`参加OK: ${teamName} (${id})`);
+          } catch (err) {
+            debug(`参加失敗: ${err.message}`);
+            alert("参加に失敗: " + err.message);
+            btn.disabled = false;
+            btn.textContent = "このチームで参加する";
+          }
+          return;
+        }
         if (e.target.id === "rep-form") {
           e.preventDefault();
           const rep = e.target.rep.value.trim();
@@ -286,17 +337,55 @@ body {
       let quizUnsub = null;
       let answerUnsub = null;
       let lastSubscribedQuizId = null;
+      let teamUnsub = null;
 
-      onSnapshot(refs.team(teamId), (snap) => {
-        if (!snap.exists()) {
-          showInfo(
-            "指定されたチームが見つかりません。司会者に確認してください。"
-          );
-          return;
+      // 同名チームがあれば再利用し、無ければ新規作成する。
+      // 一度離脱した代表者が同じ名前で戻ってきてもスコアを引き継げる。
+      async function joinTeam(teamName, rep) {
+        const snap = await getDocs(query(refs.teams(), orderBy("order")));
+        const docs = snap.docs;
+        const existing = docs.find(
+          (d) =>
+            String(d.data().name || "").trim().toLowerCase() ===
+            teamName.toLowerCase()
+        );
+        if (existing) {
+          await updateDoc(refs.team(existing.id), { representative: rep });
+          return existing.id;
         }
-        store.team = { id: snap.id, ...snap.data() };
-        render();
-      });
+        const order = docs.length
+          ? Math.max(...docs.map((d) => d.data().order || 0)) + 1
+          : 0;
+        const created = await addDoc(refs.teams(), {
+          name: teamName,
+          score: 0,
+          representative: rep,
+          order,
+        });
+        return created.id;
+      }
+
+      function startTeamSubscription() {
+        if (teamUnsub) teamUnsub();
+        teamUnsub = onSnapshot(refs.team(teamId), (snap) => {
+          if (!snap.exists()) {
+            // 司会者が削除／リセットした場合は参加フォームに戻す
+            debug("チームが削除されました");
+            localStorage.removeItem(JOIN_KEY);
+            store.team = null;
+            teamId = null;
+            if (teamUnsub) teamUnsub();
+            teamUnsub = null;
+            renderJoinForm();
+            return;
+          }
+          store.team = { id: snap.id, ...snap.data() };
+          render();
+        });
+      }
+
+      if (teamId) startTeamSubscription();
+      else renderJoinForm();
 
       onSnapshot(refs.state(), (snap) => {
         store.state = snap.exists() ? snap.data() : null;
@@ -306,8 +395,10 @@ body {
 
       function syncQuizSubscriptions() {
         const quizId = store.state?.currentQuizId || null;
-        if (quizId === lastSubscribedQuizId) return;
-        lastSubscribedQuizId = quizId;
+        // チーム確定前／チーム変更後も再購読が必要なので teamId も鍵に含める
+        const subKey = `${quizId || ""}:${teamId || ""}`;
+        if (subKey === lastSubscribedQuizId) return;
+        lastSubscribedQuizId = subKey;
         if (quizUnsub) {
           quizUnsub();
           quizUnsub = null;
@@ -318,7 +409,7 @@ body {
         }
         store.quiz = null;
         store.answer = null;
-        if (!quizId) return;
+        if (!quizId || !teamId) return;
         quizUnsub = onSnapshot(refs.quiz(quizId), (qsnap) => {
           store.quiz = qsnap.exists()
             ? { id: qsnap.id, ...qsnap.data() }
@@ -458,17 +549,25 @@ body {
             <div class="text-xs text-[color:var(--mq-muted)]">
               代表: <span class="text-[color:var(--mq-text)]">${escapeHtml(repName)}</span>
               <button id="btn-change-rep" class="ml-2 text-[color:var(--mq-muted)] underline">変更</button>
+              <button id="btn-leave-team" class="ml-2 text-[color:var(--mq-muted)] underline">チーム変更</button>
             </div>
           </header>`;
       }
 
       let votingRenderKey = null;
       function render() {
+        if (!teamId) {
+          votingRenderKey = null;
+          // 入力途中のフォームを state 更新で消さないよう、未表示のときだけ描く
+          if (!document.getElementById("join-form")) renderJoinForm();
+          return;
+        }
         if (!store.team || !store.state) return;
         const savedRep = localStorage.getItem(repKey);
         if (!savedRep) {
           votingRenderKey = null;
-          renderRepForm();
+          // 同じ理由で、代表者名フォームも入力中は再描画しない
+          if (!document.getElementById("rep-form")) renderRepForm();
           return;
         }
         const status = store.state.status;
@@ -487,6 +586,44 @@ body {
         if (status === "result") renderResult(savedRep);
         else if (status === "final_ranking") renderFinal(savedRep);
         else renderWaiting(savedRep);
+      }
+
+      function renderJoinForm() {
+        root.innerHTML = `
+          <header class="pt-6 text-center space-y-2">
+            <div class="mq-serif mq-gold-text text-3xl font-bold">WEDDING QUIZ</div>
+            <p class="text-xs text-[color:var(--mq-muted)] tracking-widest">ウェディングクイズ</p>
+          </header>
+          <section class="mq-panel p-5 mt-5 space-y-4">
+            <h1 class="text-lg font-bold mq-mincho">チームを作って参加</h1>
+            <p class="text-xs text-[color:var(--mq-muted)] leading-relaxed">
+              チーム名と代表者のお名前を入力してください。<br>
+              同じチーム名がすでにある場合はそのチームに合流します。
+            </p>
+            <form id="join-form" class="space-y-3">
+              <label class="block">
+                <span class="text-xs text-[color:var(--mq-muted)]">チーム名</span>
+                <input type="text" name="teamName" required minlength="1" maxlength="20"
+                  placeholder="例: さくらテーブル"
+                  class="mq-input w-full px-3 py-3 text-base mt-1"
+                  autocomplete="off" autofocus>
+              </label>
+              <label class="block">
+                <span class="text-xs text-[color:var(--mq-muted)]">代表者のお名前</span>
+                <input type="text" name="rep" required minlength="1" maxlength="20"
+                  placeholder="例: やまだ"
+                  class="mq-input w-full px-3 py-3 text-base mt-1"
+                  autocomplete="off">
+              </label>
+              <button type="submit" class="mq-btn mq-btn--gold w-full px-4 py-3">
+                このチームで参加する
+              </button>
+            </form>
+          </section>
+          <p class="text-xs text-[color:var(--mq-muted)] text-center">
+            ※ 代表者のスマホで回答します
+          </p>
+        `;
       }
 
       function renderRepForm() {

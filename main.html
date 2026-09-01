@@ -121,8 +121,23 @@
       .mq-input::placeholder { color: #8f8cae; }
 
       /* main.html 固有 */
+      html, body { height: 100%; }
       .timer-ring {
         transition: stroke-dashoffset 0.4s linear;
+      }
+      /* 1画面に収めるための自動縮小コンテナ。
+         中身の実寸を測って transform: scale() で押し込む。 */
+      .mq-fit {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .mq-fit-inner {
+        transform-origin: center center;
+        width: 100%;
       }
       .mq-typing::after {
         content: "";
@@ -139,8 +154,8 @@
       }
     </style>
   </head>
-  <body class="min-h-screen">
-    <main id="root" class="min-h-screen p-10 flex flex-col">
+  <body class="h-screen overflow-hidden">
+    <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
       <p class="text-center text-[color:var(--mq-muted)]">接続中...</p>
     </main>
     <div id="sound-hint" class="fixed bottom-4 right-4 z-50 bg-black/75 border border-[rgba(212,175,55,0.5)] rounded-full px-4 py-2 text-sm text-[color:var(--mq-gold-hi)]">
@@ -343,11 +358,41 @@
         </video>`;
       }
 
-      function playerUrl(teamId) {
-        const url = new URL("player.html", window.location.href);
-        url.searchParams.set("team", teamId);
-        return url.toString();
+      // .mq-fit-inner の実寸が親を超えていたら scale で縮小して1画面に収める。
+      // 画像・動画の読み込み後にも高さが変わるので ResizeObserver で追従する。
+      let fitObserver = null;
+      function applyFit() {
+        document.querySelectorAll(".mq-fit").forEach((box) => {
+          const inner = box.querySelector(".mq-fit-inner");
+          if (!inner) return;
+          inner.style.transform = "scale(1)";
+          const availH = box.clientHeight;
+          const availW = box.clientWidth;
+          const needH = inner.scrollHeight;
+          const needW = inner.scrollWidth;
+          if (!availH || !needH) return;
+          const scale = Math.min(1, availH / needH, availW / needW || 1);
+          if (scale < 0.999) {
+            inner.style.transform = `scale(${scale})`;
+          }
+        });
       }
+
+      function scheduleFit() {
+        requestAnimationFrame(() => {
+          applyFit();
+          // フォント・画像の反映が遅れるケースの保険
+          setTimeout(applyFit, 120);
+          setTimeout(applyFit, 500);
+        });
+        if (fitObserver) fitObserver.disconnect();
+        fitObserver = new ResizeObserver(() => applyFit());
+        document
+          .querySelectorAll(".mq-fit-inner")
+          .forEach((el) => fitObserver.observe(el));
+      }
+
+      window.addEventListener("resize", applyFit);
 
       let votingRenderKey = null;
       let questionTypingTimer = null;
@@ -405,60 +450,71 @@
         return renderWaiting();
       }
 
+      function joinUrl() {
+        return new URL("player.html", window.location.href).toString();
+      }
+
+      // 参加用 QR は全チーム共通の1枚だけ。チームは参加者が自分で作る。
       function renderWaiting() {
         const currentIdx = state.currentQuizIndex ?? -1;
         const isStart = currentIdx < 0;
+        const quiz = quizzes.find((q) => q.id === state.currentQuizId);
+
         root.innerHTML = `
-          <header class="text-center mb-8">
-            <p class="mq-serif mq-gold-text text-6xl md:text-8xl font-black tracking-widest mb-4">WEDDING QUIZ</p>
-            <p class="text-xs text-[color:var(--mq-muted)] tracking-widest mb-2">ウェディングクイズ</p>
-            <h1 class="mq-mincho text-4xl md:text-5xl font-bold">
-              ${isStart ? "まもなく開始" : "次の問題を準備中"}
+          <header class="text-center shrink-0">
+            <p class="mq-serif mq-gold-text text-4xl md:text-5xl font-black tracking-widest">WEDDING QUIZ</p>
+            <h1 class="mq-mincho text-xl md:text-2xl font-bold mt-1">
+              ${isStart ? "まもなく開始" : `次の問題を準備中（${currentIdx + 1} / ${quizzes.length} 問終了）`}
             </h1>
-            <p class="mt-3 text-[color:var(--mq-muted)]">
-              各チームの代表者はスマホで QR を読み取り、名前を入力してください
-            </p>
           </header>
-          <section id="qr-grid" class="grid ${
-            teams.length <= 3
-              ? "grid-cols-1 md:grid-cols-3"
-              : "grid-cols-2 md:grid-cols-5"
-          } gap-5 mb-8"></section>
-          ${teams.length > 0 ? renderScoreboard() : ""}
+          <div class="mq-fit mt-3">
+            <div class="mq-fit-inner flex items-start justify-center gap-8">
+              <section class="shrink-0 text-center">
+                <div class="bg-white rounded-xl p-4 border-2 border-[#d4af37] shadow-[0_0_28px_rgba(212,175,55,0.4)] inline-block">
+                  <div id="join-qr"></div>
+                </div>
+                <p class="mq-mincho text-base font-bold mt-3">スマホで読み取って参加</p>
+                <p class="text-xs text-[color:var(--mq-muted)] mt-1 leading-relaxed">
+                  チーム名と代表者名を入力してください<br>
+                  同じチーム名なら合流できます
+                </p>
+              </section>
+              <section class="flex-1 max-w-2xl min-w-0">
+                ${
+                  teams.length === 0
+                    ? `<div class="mq-panel p-6 text-center text-[color:var(--mq-muted)]">
+                         まだ参加チームがありません
+                       </div>`
+                    : renderScoreboard()
+                }
+                ${
+                  quiz && !isStart
+                    ? `<div class="mq-panel p-3 mt-3">
+                         <div class="text-[10px] text-[color:var(--mq-muted)] tracking-widest mb-1">前の問題</div>
+                         <div class="mq-mincho text-sm truncate">${escapeHtml(quiz.question)}</div>
+                         <div class="text-xs mt-1">
+                           <span class="mq-hex-letter">${String.fromCharCode(65 + quiz.correctIndex)}:</span>
+                           <span class="text-[#6ee7b7]">${escapeHtml(quiz.choices[quiz.correctIndex])}</span>
+                         </div>
+                       </div>`
+                    : ""
+                }
+              </section>
+            </div>
+          </div>
+          <div class="shrink-0 text-center text-xs text-[color:var(--mq-muted)] mt-2">
+            参加チーム ${teams.length} / 全 ${quizzes.length} 問
+          </div>
         `;
 
-        const grid = document.getElementById("qr-grid");
-        teams.forEach((t, i) => {
-          const color = teamColor(i);
-          const card = document.createElement("div");
-          card.className =
-            "bg-white rounded-lg p-4 flex flex-col items-center border-2 border-[#d4af37] shadow-[0_0_24px_rgba(212,175,55,0.35)]";
-          card.innerHTML = `
-            <div class="w-full flex items-center gap-2 mb-3">
-              <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
-              <span class="text-zinc-900 font-bold flex-1 truncate">${escapeHtml(
-                t.name
-              )}</span>
-            </div>
-            <div id="qr-${t.id}"></div>
-            <div class="text-zinc-600 text-xs mt-3">
-              代表: ${
-                t.representative
-                  ? `<span class="text-zinc-900 font-medium">${escapeHtml(
-                      t.representative
-                    )}</span>`
-                  : `<span class="text-zinc-400">未登録</span>`
-              }
-            </div>
-          `;
-          grid.appendChild(card);
-          new QRCode(card.querySelector(`#qr-${t.id}`), {
-            text: playerUrl(t.id),
-            width: 180,
-            height: 180,
-            correctLevel: QRCode.CorrectLevel.M,
-          });
+        const qrBox = document.getElementById("join-qr");
+        new QRCode(qrBox, {
+          text: joinUrl(),
+          width: 220,
+          height: 220,
+          correctLevel: QRCode.CorrectLevel.M,
         });
+        scheduleFit();
       }
 
       function renderCorrectTeamsBanner(correct, teamById, answerByTeam, quiz) {
@@ -470,13 +526,13 @@
         const points = quiz.points || 10;
         if (correctTeams.length === 0) {
           return `
-            <div class="max-w-5xl w-full mq-panel p-5 text-center">
+            <div class="w-full mq-panel p-4 text-center">
               <div class="text-xs text-[color:var(--mq-muted)] tracking-wide">正解チーム</div>
               <div class="mq-mincho text-2xl font-bold text-[color:var(--mq-muted)] mt-1">正解なし…</div>
             </div>`;
         }
         return `
-          <div class="max-w-5xl w-full mq-panel border-2 border-[#d4af37] p-5">
+          <div class="w-full mq-panel border-2 border-[#d4af37] p-4">
             <div class="text-center mb-3">
               <div class="mq-serif mq-gold-text text-xl md:text-2xl font-bold tracking-wide">🎉 正解チーム ・ +${points} 点</div>
             </div>
@@ -511,24 +567,24 @@
           .sort((a, b) => (b.score || 0) - (a.score || 0));
         const max = Math.max(1, ...teams.map((x) => x.score || 0));
         return `
-          <section class="max-w-3xl mx-auto w-full mq-panel p-5">
-            <h2 class="mq-serif mq-gold-text text-sm font-bold uppercase tracking-wide mb-3">
+          <section class="w-full mq-panel p-4">
+            <h2 class="mq-serif mq-gold-text text-xs font-bold uppercase tracking-wide mb-2">
               現在のスコア
             </h2>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               ${sorted
                 .map((t) => {
                   const color = teamColor(t.origIndex);
                   const pct = ((t.score || 0) / max) * 100;
                   return `
-                  <div class="flex items-center gap-3 text-sm">
-                    <div class="w-32 font-medium truncate">${escapeHtml(
+                  <div class="flex items-center gap-2.5 text-xs">
+                    <div class="w-24 font-medium truncate">${escapeHtml(
                       t.name
                     )}</div>
-                    <div class="flex-1 bg-black/40 border border-[rgba(212,175,55,.25)] rounded h-5 overflow-hidden">
+                    <div class="flex-1 bg-black/40 border border-[rgba(212,175,55,.25)] rounded h-4 overflow-hidden">
                       <div class="h-full" style="width:${pct}%;background-color:${color}"></div>
                     </div>
-                    <div class="w-16 text-right font-bold mq-serif">${t.score || 0}</div>
+                    <div class="w-10 text-right font-bold mq-serif text-sm">${t.score || 0}</div>
                   </div>`;
                 })
                 .join("")}
@@ -548,73 +604,86 @@
         const remaining = Math.ceil(remainingMs / 1000);
         const progress = Math.max(0, Math.min(1, remainingMs / duration));
         const answeredTeamIds = new Set(answers.map((a) => a.teamId));
+        const hasMedia = !!(quiz.videoUrl || quiz.imageUrl);
 
-        const circumference = 2 * Math.PI * 65;
+        const circumference = 2 * Math.PI * 52;
         const dashOffset = circumference * (1 - progress);
         const timerColor =
           remaining <= 5 ? "#f87171" : remaining <= 10 ? "#fbbf24" : "#d4af37";
 
+        // タイマーはヘッダー右に置き、縦積みを減らして1画面に収める
         root.innerHTML = `
-          <header class="mb-4 flex items-center justify-between">
-            <span class="mq-serif text-[color:var(--mq-muted)] text-sm tracking-widest">
-              問題 ${(state.currentQuizIndex ?? 0) + 1} / ${quizzes.length}
-            </span>
-            <span class="mq-panel border-[#d4af37] text-[color:var(--mq-gold-hi)] rounded-full px-4 py-1 font-bold">
-              ${quiz.points || 10} 点問題
-            </span>
-          </header>
-          <section class="flex-1 flex flex-col items-center justify-center gap-6">
-            <div class="mq-hex max-w-5xl w-full">
-              <h1 class="mq-hex-inner mq-mincho px-10 py-6 text-3xl md:text-5xl font-bold text-center leading-snug flex items-center justify-center" aria-label="${escapeHtml(quiz.question)}">
-                <span id="question-text"></span>
-              </h1>
+          <header class="shrink-0 flex items-center gap-5">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="mq-serif text-[color:var(--mq-muted)] text-xs tracking-widest">
+                  問題 ${(state.currentQuizIndex ?? 0) + 1} / ${quizzes.length}
+                </span>
+                <span class="mq-panel border-[#d4af37] text-[color:var(--mq-gold-hi)] rounded-full px-3 py-0.5 text-xs font-bold">
+                  ${quiz.points || 10} 点問題
+                </span>
+              </div>
+              <div class="mq-hex w-full">
+                <h1 class="mq-hex-inner mq-mincho px-8 py-4 ${
+                  hasMedia ? "text-xl md:text-3xl" : "text-2xl md:text-4xl"
+                } font-bold text-center leading-snug flex items-center justify-center" aria-label="${escapeHtml(quiz.question)}">
+                  <span id="question-text"></span>
+                </h1>
+              </div>
             </div>
-            ${videoHtml(
-              quiz.videoUrl,
-              "w-full max-w-4xl aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
-            )}
-            ${
-              quiz.imageUrl
-                ? `<img src="${quiz.imageUrl}" class="max-h-80 md:max-h-96 rounded-lg border border-[rgba(212,175,55,.4)] object-contain">`
-                : ""
-            }
-            <div class="relative">
-              <svg width="160" height="160" viewBox="0 0 160 160">
-                <circle cx="80" cy="80" r="65" stroke="rgba(212,175,55,0.2)" stroke-width="10" fill="none"/>
-                <circle id="timer-ring-fg" cx="80" cy="80" r="65" stroke="${timerColor}" stroke-width="10" fill="none"
+            <div class="relative shrink-0">
+              <svg width="128" height="128" viewBox="0 0 128 128">
+                <circle cx="64" cy="64" r="52" stroke="rgba(212,175,55,0.2)" stroke-width="9" fill="none"/>
+                <circle id="timer-ring-fg" cx="64" cy="64" r="52" stroke="${timerColor}" stroke-width="9" fill="none"
                   stroke-linecap="round"
-                  transform="rotate(-90 80 80)"
+                  transform="rotate(-90 64 64)"
                   stroke-dasharray="${circumference}"
                   stroke-dashoffset="${dashOffset}"
                   class="timer-ring"/>
               </svg>
               <div class="absolute inset-0 flex items-center justify-center">
-                <span id="timer-num" class="mq-serif text-5xl font-bold" style="color:${timerColor}">${remaining}</span>
+                <span id="timer-num" class="mq-serif text-4xl font-bold" style="color:${timerColor}">${remaining}</span>
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-x-8 gap-y-4 max-w-5xl w-full">
-              ${quiz.choices
-                .map(
-                  (c, i) => `
-                <div class="mq-hexline">
-                  <div class="mq-hex">
-                    <div class="mq-hex-inner px-10 py-5 text-xl md:text-2xl font-medium flex items-center gap-4">
-                      <span class="mq-hex-letter text-2xl md:text-3xl shrink-0">${String.fromCharCode(
-                        65 + i
-                      )}:</span>
-                      <span>${escapeHtml(c)}</span>
+          </header>
+          <div class="mq-fit mt-3">
+            <div class="mq-fit-inner flex flex-col items-center gap-4">
+              ${videoHtml(
+                quiz.videoUrl,
+                "w-full max-w-3xl aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
+              )}
+              ${
+                quiz.imageUrl
+                  ? `<img src="${quiz.imageUrl}" class="max-h-[38vh] rounded-lg border border-[rgba(212,175,55,.4)] object-contain">`
+                  : ""
+              }
+              <div class="grid grid-cols-2 gap-x-6 gap-y-3 max-w-5xl w-full">
+                ${quiz.choices
+                  .map(
+                    (c, i) => `
+                  <div class="mq-hexline">
+                    <div class="mq-hex">
+                      <div class="mq-hex-inner px-9 py-4 ${
+                        hasMedia ? "text-lg md:text-xl" : "text-xl md:text-2xl"
+                      } font-medium flex items-center gap-3">
+                        <span class="mq-hex-letter text-xl md:text-2xl shrink-0">${String.fromCharCode(
+                          65 + i
+                        )}:</span>
+                        <span>${escapeHtml(c)}</span>
+                      </div>
                     </div>
-                  </div>
-                </div>`
-                )
-                .join("")}
+                  </div>`
+                  )
+                  .join("")}
+              </div>
             </div>
-          </section>
-          <section id="answered-section" class="max-w-5xl mx-auto w-full mt-6">
+          </div>
+          <section id="answered-section" class="shrink-0 max-w-5xl mx-auto w-full mt-2">
             ${answeredChipsHtml(answeredTeamIds)}
           </section>
         `;
         typeQuestion(quiz.question);
+        scheduleFit();
       }
 
       function answeredChipsHtml(answeredTeamIds) {
@@ -678,92 +747,105 @@
           teams.map((t, i) => [t.id, { ...t, origIndex: i }])
         );
         const answerByTeam = new Map(answers.map((a) => [a.teamId, a]));
+        const hasMedia = !!(quiz.videoUrl || quiz.imageUrl);
 
+        // 左: 問題と選択肢 / 右: 正解チーム・回答一覧・スコア の2カラムで1画面に収める
         root.innerHTML = `
-          <header class="mb-4 text-center">
+          <header class="shrink-0 text-center">
             <p class="mq-serif mq-gold-text text-xs tracking-widest">正解発表 ・ ${
               quiz.points || 10
             } 点</p>
-            <h1 class="mq-mincho text-2xl md:text-3xl font-bold mt-1">
+            <h1 class="mq-mincho text-xl md:text-2xl font-bold mt-0.5 truncate">
               ${escapeHtml(quiz.question)}
             </h1>
-            ${videoHtml(
-              quiz.videoUrl,
-              "mt-3 w-full max-w-3xl mx-auto aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
-            )}
-            ${
-              quiz.imageUrl
-                ? `<img src="${quiz.imageUrl}" class="mt-3 max-h-56 md:max-h-64 rounded-lg border border-[rgba(212,175,55,.4)] object-contain mx-auto">`
-                : ""
-            }
           </header>
-          <section class="flex-1 flex flex-col items-center justify-center gap-6">
-            <div class="grid grid-cols-2 gap-x-8 gap-y-4 max-w-5xl w-full">
-              ${quiz.choices
-                .map((c, i) => {
-                  const isCorrect = i === correct;
-                  return `
-                  <div class="mq-hexline">
-                    <div class="mq-hex">
-                      <div class="mq-hex-inner ${
-                        isCorrect ? "mq-hex-inner--correct" : "mq-hex-inner--dim"
-                      } px-10 py-5 text-xl md:text-2xl font-medium flex items-center gap-4">
-                        <span class="mq-hex-letter text-2xl md:text-3xl shrink-0">${String.fromCharCode(
-                          65 + i
-                        )}:</span>
-                        <span>${escapeHtml(c)}</span>
-                        ${
-                          isCorrect
-                            ? '<span class="ml-auto text-sm font-bold">正解</span>'
-                            : ""
-                        }
-                      </div>
-                    </div>
-                  </div>`;
-                })
-                .join("")}
-            </div>
-            ${renderCorrectTeamsBanner(correct, teamById, answerByTeam, quiz)}
-            <div class="max-w-5xl w-full mq-panel p-5">
-              <h2 class="mq-serif mq-gold-text text-sm font-bold uppercase tracking-wide mb-3">
-                チームの回答
-              </h2>
-              <div class="flex flex-wrap gap-3">
-                ${teams
-                  .map((t, i) => {
-                    const a = answerByTeam.get(t.id);
-                    const color = teamColor(i);
-                    const isCorrect = a?.choice === correct;
-                    return `
-                    <div class="px-3 py-2 rounded border bg-black/30 text-sm"
-                      style="border-color:${color}">
-                      <div class="flex items-center gap-2 text-[color:var(--mq-muted)] text-xs">
-                        <span class="w-2 h-2 rounded-full" style="background-color:${color}"></span>
-                        ${escapeHtml(t.name)}
-                      </div>
-                      <div class="mt-1">
-                        ${
-                          a
-                            ? `<span class="mq-hex-letter">${String.fromCharCode(
-                                65 + a.choice
-                              )}:</span> ${escapeHtml(
-                                quiz.choices[a.choice]
-                              )} <span class="${
-                                isCorrect
-                                  ? "text-emerald-400"
-                                  : "text-rose-400"
-                              }">${isCorrect ? "✓" : "✗"}</span>`
-                            : "<span class='text-[color:var(--mq-muted)]'>未回答</span>"
-                        }
-                      </div>
-                    </div>`;
-                  })
-                  .join("")}
+          <div class="mq-fit mt-3">
+            <div class="mq-fit-inner grid ${
+              hasMedia ? "lg:grid-cols-2" : "lg:grid-cols-5"
+            } gap-6 items-start">
+              <div class="${hasMedia ? "" : "lg:col-span-3"} space-y-3">
+                ${videoHtml(
+                  quiz.videoUrl,
+                  "w-full aspect-video rounded-lg border border-[rgba(212,175,55,.4)] bg-black"
+                )}
+                ${
+                  quiz.imageUrl
+                    ? `<img src="${quiz.imageUrl}" class="w-full max-h-[30vh] rounded-lg border border-[rgba(212,175,55,.4)] object-contain">`
+                    : ""
+                }
+                <div class="space-y-2.5">
+                  ${quiz.choices
+                    .map((c, i) => {
+                      const isCorrect = i === correct;
+                      return `
+                      <div class="mq-hexline">
+                        <div class="mq-hex">
+                          <div class="mq-hex-inner ${
+                            isCorrect
+                              ? "mq-hex-inner--correct"
+                              : "mq-hex-inner--dim"
+                          } px-9 py-3 text-base md:text-xl font-medium flex items-center gap-3">
+                            <span class="mq-hex-letter text-xl md:text-2xl shrink-0">${String.fromCharCode(
+                              65 + i
+                            )}:</span>
+                            <span>${escapeHtml(c)}</span>
+                            ${
+                              isCorrect
+                                ? '<span class="ml-auto text-xs font-bold">正解</span>'
+                                : ""
+                            }
+                          </div>
+                        </div>
+                      </div>`;
+                    })
+                    .join("")}
+                </div>
+              </div>
+              <div class="${hasMedia ? "" : "lg:col-span-2"} space-y-3">
+                ${renderCorrectTeamsBanner(correct, teamById, answerByTeam, quiz)}
+                <div class="mq-panel p-4">
+                  <h2 class="mq-serif mq-gold-text text-xs font-bold uppercase tracking-wide mb-2">
+                    チームの回答
+                  </h2>
+                  <div class="flex flex-wrap gap-2">
+                    ${teams
+                      .map((t, i) => {
+                        const a = answerByTeam.get(t.id);
+                        const color = teamColor(i);
+                        const isCorrect = a?.choice === correct;
+                        return `
+                        <div class="px-2.5 py-1.5 rounded border bg-black/30 text-xs"
+                          style="border-color:${color}">
+                          <div class="flex items-center gap-1.5 text-[color:var(--mq-muted)] text-[10px]">
+                            <span class="w-2 h-2 rounded-full" style="background-color:${color}"></span>
+                            ${escapeHtml(t.name)}
+                          </div>
+                          <div class="mt-0.5">
+                            ${
+                              a
+                                ? `<span class="mq-hex-letter">${String.fromCharCode(
+                                    65 + a.choice
+                                  )}:</span> ${escapeHtml(
+                                    quiz.choices[a.choice]
+                                  )} <span class="${
+                                    isCorrect
+                                      ? "text-emerald-400"
+                                      : "text-rose-400"
+                                  }">${isCorrect ? "✓" : "✗"}</span>`
+                                : "<span class='text-[color:var(--mq-muted)]'>未回答</span>"
+                            }
+                          </div>
+                        </div>`;
+                      })
+                      .join("")}
+                  </div>
+                </div>
+                ${renderScoreboard()}
               </div>
             </div>
-          </section>
-          ${renderScoreboard()}
+          </div>
         `;
+        scheduleFit();
       }
 
       function renderFinal() {
@@ -772,19 +854,19 @@
           .sort((a, b) => (b.score || 0) - (a.score || 0));
         const medals = ["1st", "2nd", "3rd"];
         root.innerHTML = `
-          <header class="text-center mb-10">
-            <p class="mq-serif mq-gold-text text-4xl md:text-6xl font-black tracking-widest">FINAL RESULT</p>
-            <h1 class="mq-mincho text-3xl md:text-4xl font-bold mt-3">最終結果</h1>
+          <header class="text-center shrink-0 mb-4">
+            <p class="mq-serif mq-gold-text text-3xl md:text-5xl font-black tracking-widest">FINAL RESULT</p>
+            <h1 class="mq-mincho text-xl md:text-2xl font-bold mt-1">最終結果</h1>
           </header>
-          <section class="flex-1 flex items-center justify-center">
-            <div class="max-w-3xl w-full space-y-3">
+          <section class="mq-fit">
+            <div class="mq-fit-inner max-w-3xl mx-auto space-y-2.5">
               ${sorted
                 .map((t, rank) => {
                   const color = teamColor(t.origIndex);
                   const label = medals[rank] || `${rank + 1}th`;
                   const emphasize = rank === 0;
                   const rowInner = `
-                    <div class="text-2xl font-bold w-20 mq-serif ${
+                    <div class="text-xl font-bold w-20 mq-serif ${
                       emphasize
                         ? "mq-gold-text"
                         : rank === 1
@@ -793,11 +875,11 @@
                         ? "text-[#cd9a62]"
                         : "text-[color:var(--mq-muted)]"
                     }">${emphasize ? "👑 " : ""}${label}</div>
-                    <div class="w-2 h-10 rounded" style="background-color:${color}"></div>
-                    <div class="flex-1 mq-mincho text-xl md:text-2xl font-bold">${escapeHtml(
+                    <div class="w-2 h-9 rounded" style="background-color:${color}"></div>
+                    <div class="flex-1 mq-mincho text-lg md:text-2xl font-bold">${escapeHtml(
                       t.name
                     )}</div>
-                    <div class="mq-serif text-3xl md:text-4xl font-bold ${
+                    <div class="mq-serif text-2xl md:text-4xl font-bold ${
                       emphasize ? "mq-gold-text" : ""
                     }">${
                     t.score || 0
@@ -805,11 +887,11 @@
                   if (emphasize) {
                     return `
                   <div class="rounded-xl p-[3px] bg-gradient-to-b from-[#f7e39a] via-[#d4af37] to-[#8a6a1c] shadow-[0_0_30px_rgba(212,175,55,0.45)]">
-                    <div class="flex items-center gap-4 rounded-[0.65rem] p-4 bg-gradient-to-b from-[#1a2b66] to-[#060d28]">${rowInner}</div>
+                    <div class="flex items-center gap-4 rounded-[0.65rem] p-3 bg-gradient-to-b from-[#1a2b66] to-[#060d28]">${rowInner}</div>
                   </div>`;
                   }
                   return `
-                  <div class="flex items-center gap-4 mq-panel p-4 ${
+                  <div class="flex items-center gap-4 mq-panel p-3 ${
                     rank === 1
                       ? "border-[#c0c7d4]"
                       : rank === 2
@@ -821,6 +903,7 @@
             </div>
           </section>
         `;
+        scheduleFit();
       }
     </script>
   </body>
