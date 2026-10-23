@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>管理画面 - Wedding Quiz</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- フォントは読み込めなくても表示を止めない（media=print → onload で適用） -->
     <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
+      rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
     <style>
       /* admin.html 固有 */
       /* 司会者が本番でスマホから操作するので、押しやすさを優先する */
@@ -40,6 +40,8 @@
         border-radius: 0;
       }
     </style>
+    <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
+    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
   </head>
   <body>
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
@@ -51,7 +53,7 @@
           </h1>
           <p id="auth-status" class="text-xs qz-muted mt-1">接続中...</p>
         </div>
-        <a href="index.html" class="text-sm qz-muted hover:text-[var(--coral)]"
+        <a id="top-link" href="index.html" class="text-sm qz-muted hover:text-[var(--coral)]"
           >← トップ</a
         >
       </header>
@@ -68,12 +70,18 @@
           >
             読み込み中...
           </div>
-          <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             <button
               id="btn-start"
               class="qz-btn qz-btn--primary"
             >
               次の問題スタート
+            </button>
+            <button
+              id="btn-close"
+              class="qz-btn"
+            >
+              回答締切
             </button>
             <button
               id="btn-reveal"
@@ -94,12 +102,24 @@
               リセット
             </button>
           </div>
+          <div id="live-panel" class="hidden p-4 space-y-3" style="background:var(--pink-soft);border:2px solid var(--coral)">
+            <div>
+              <span class="qz-label" style="color:var(--coral)">Live answer</span>
+              <span class="qz-jp-head block text-base mt-0.5">当日の正解を選んで発表</span>
+              <p class="text-xs qz-muted mt-1 leading-relaxed">
+                実演が終わったら、正解の選択肢を押してください。確認のあと採点して正解発表になります。
+                回答受付中に押した場合は、先に回答を締め切ってから採点します。
+              </p>
+            </div>
+            <div id="live-choices" class="grid sm:grid-cols-2 gap-2"></div>
+          </div>
+          <p id="op-message" class="hidden text-xs font-bold p-2" style="background:#fdecea;color:#c0392b;border:2px solid #c0392b"></p>
           <div id="video-controls" class="hidden pt-3 space-y-2" style="border-top:2px solid var(--forest-line)">
             <div class="text-xs qz-muted">
               メイン画面の動画コントロール
               <span id="video-state" class="ml-1 text-[var(--coral)] font-bold"></span>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
               <button id="btn-video-play" class="qz-btn qz-btn--primary">
                 ▶ 再生
               </button>
@@ -112,12 +132,28 @@
               <button id="btn-video-unmute" class="qz-btn">
                 🔊 音声オン
               </button>
+              <button id="btn-video-mute" class="qz-btn">
+                🔇 ミュート
+              </button>
             </div>
             <p class="text-[10px] qz-muted leading-relaxed">
-              ※ 音声はメイン画面側で一度クリックが必要な場合があります（ブラウザの自動再生制限）。<br>
-              ※ YouTube・Google Drive の埋め込みは外部プレイヤーのため制御できません。MP4 の直リンクを推奨します。
+              ※ メイン画面は開いたときに「開始する」を押してください（音声を出せる状態になります）。<br>
+              ※ YouTube・Google Drive・Vimeo の埋め込みは外部プレイヤーのため、ここから制御できず事前読み込みもできません。MP4 を推奨します。
             </p>
           </div>
+        </section>
+
+        <section class="qz-card p-5 space-y-3">
+          <h2>
+            <span class="qz-label" style="color:var(--coral)">Screens</span>
+            <span class="qz-jp-head block text-base mt-0.5">メイン画面の状態</span>
+          </h2>
+          <div id="screen-status" class="space-y-2 text-sm">
+            <p class="text-xs qz-muted">確認中...</p>
+          </div>
+          <p class="text-[10px] qz-muted leading-relaxed">
+            メイン画面（プロジェクター）が 20 秒ごとに状態を知らせます。動画が「準備OK」になっていれば、その後に回線が切れても再生できます。
+          </p>
         </section>
 
         <section class="qz-card p-5 space-y-4">
@@ -196,7 +232,7 @@
                 <span id="quiz-image-size" class="text-xs qz-muted"></span>
               </div>
             </div>
-            <input type="url" name="videoUrl" placeholder="動画URL (任意、YouTube・Google Drive・Vimeo・MP4)"
+            <input type="text" name="videoUrl" placeholder="動画URL (任意。MP4 推奨。例: media/meikko.mp4 や https://…/video.mp4)"
               class="qz-input">
             <input type="text" name="note" placeholder="進行メモ (任意、司会者用。参加者には表示されません)"
               class="qz-input">
@@ -240,6 +276,7 @@
                 <option value="1">B</option>
                 <option value="2">C</option>
                 <option value="3">D</option>
+                <option value="live">当日決める</option>
               </select>
               <label class="qz-muted ml-2">点数:</label>
               <input
@@ -268,26 +305,38 @@
                 追加
               </button>
             </div>
+            <p class="text-[10px] qz-muted leading-relaxed">
+              「当日決める」… その場の実演で正解が決まる問題用。出題 → 回答締切 → 実演 → 進行コントロールで正解を選んで発表、の流れになります。
+            </p>
           </form>
         </section>
+        <p id="app-version" class="text-[10px] qz-muted text-center"></p>
       </div>
     </main>
 
-    <script src="env.js"></script>
+    <script src="env.js?v=20261023a"></script>
     <script type="module">
       import {
         ensureSignedIn,
         envError,
         db,
         APP_ID,
+        APP_VERSION,
+        IS_REHEARSAL,
         refs,
         TEAM_COLORS,
         DURATION_MS,
         SCORE_PER_CORRECT,
+        STATUS_LABELS,
         escapeHtml,
         renderSetupError,
-      } from "./js/firebase-init.js";
-      import {
+        describeError,
+        mountConnectionBanner,
+        mountRehearsalBadge,
+        withAppParam,
+        isLiveQuiz,
+        correctIndexOf,
+        choiceLetter,
         onSnapshot,
         getDocs,
         getDoc,
@@ -300,11 +349,16 @@
         orderBy,
         where,
         writeBatch,
-      } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        closeVoting,
+        revealAndScore,
+        startAutoTimer,
+      } from "./js/firebase-init.js?v=20261023a";
 
       const authStatus = document.getElementById("auth-status");
       const errorSlot = document.getElementById("error-slot");
       const appEl = document.getElementById("app");
+      document.getElementById("top-link").href = withAppParam("index.html");
+      document.getElementById("app-version").textContent = `version ${APP_VERSION}`;
 
       if (envError) {
         renderSetupError(errorSlot, envError);
@@ -312,75 +366,208 @@
         throw new Error(envError);
       }
 
+      const conn = mountConnectionBanner();
+      mountRehearsalBadge();
+
       let user;
       try {
         user = await ensureSignedIn();
       } catch (err) {
-        renderSetupError(errorSlot, err.message || String(err));
+        renderSetupError(errorSlot, describeError(err));
+        authStatus.textContent = "Firebase: 接続失敗";
+        throw err;
+      }
+
+      const DEFAULT_STATE = {
+        status: "waiting",
+        currentQuizId: null,
+        currentQuizIndex: -1,
+        votingStartedAt: null,
+        durationMs: DURATION_MS,
+        scoredForQuizId: null,
+        revealedCorrectIndex: null,
+        scoredTeamIds: null,
+        closedAt: null,
+        videoPlaying: true,
+        videoMuted: false,
+        videoSeekTo: null,
+      };
+
+      const stateRef = refs.state();
+      try {
+        const initialSnap = await getDoc(stateRef);
+        if (!initialSnap.exists()) await setDoc(stateRef, DEFAULT_STATE);
+      } catch (err) {
+        renderSetupError(errorSlot, describeError(err));
         authStatus.textContent = "Firebase: 接続失敗";
         throw err;
       }
 
       appEl.classList.remove("hidden");
-      authStatus.textContent = `接続済 / AppID: ${APP_ID} / UID: ${user.uid.slice(
-        0,
-        8
-      )}`;
-
-      const stateRef = refs.state();
-      const initialSnap = await getDoc(stateRef);
-      if (!initialSnap.exists()) {
-        await setDoc(stateRef, {
-          status: "waiting",
-          currentQuizId: null,
-          currentQuizIndex: -1,
-          votingStartedAt: null,
-          durationMs: DURATION_MS,
-          scoredForQuizId: null,
-        });
-      }
+      authStatus.textContent = `接続済 / AppID: ${APP_ID}${
+        IS_REHEARSAL ? "（リハーサル）" : ""
+      } / UID: ${user.uid.slice(0, 8)}`;
 
       let currentState = null;
       let quizzes = [];
       let teams = [];
+      let busy = false;
 
-      onSnapshot(stateRef, (snap) => {
-        currentState = snap.data();
+      function refreshAll() {
         renderStatus();
         updateControlButtons();
+        renderLivePanel();
         renderVideoControls();
-      });
-      onSnapshot(query(refs.quizzes(), orderBy("order")), (snap) => {
-        quizzes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        renderQuizzes();
-        renderStatus();
-        updateControlButtons();
-        renderVideoControls();
-      });
-      onSnapshot(query(refs.teams(), orderBy("order")), (snap) => {
-        teams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        renderTeams();
-        renderStatus();
-      });
+      }
 
+      onSnapshot(
+        stateRef,
+        { includeMetadataChanges: true },
+        (snap) => {
+          conn.report(snap);
+          currentState = snap.data() || null;
+          refreshAll();
+        },
+        (err) => conn.error(err)
+      );
+      onSnapshot(
+        query(refs.quizzes(), orderBy("order")),
+        (snap) => {
+          quizzes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          renderQuizzes();
+          refreshAll();
+        },
+        (err) => conn.error(err)
+      );
+      onSnapshot(
+        query(refs.teams(), orderBy("order")),
+        (snap) => {
+          teams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          renderTeams();
+          renderStatus();
+        },
+        (err) => conn.error(err)
+      );
+
+      // ---- メイン画面の稼働状況 ----
+      const screenDocs = new Map();
+      const screenSeenAt = new Map(); // 管理画面の時計で「最後に更新を受け取った時刻」
+      let screensLoaded = false;
+      onSnapshot(
+        refs.screens(),
+        (snap) => {
+          const now = Date.now();
+          snap.docChanges().forEach((ch) => {
+            if (ch.type === "removed") {
+              screenDocs.delete(ch.doc.id);
+              screenSeenAt.delete(ch.doc.id);
+              return;
+            }
+            screenDocs.set(ch.doc.id, ch.doc.data());
+            // 初回読み込み分は古い画面の残骸かもしれないので、受信時刻を記録しない
+            if (screensLoaded) screenSeenAt.set(ch.doc.id, now);
+          });
+          screensLoaded = true;
+          renderScreens();
+        },
+        (err) => conn.error(err)
+      );
+      setInterval(renderScreens, 5000);
+
+      function screenAgeSec(id, data) {
+        const seen = screenSeenAt.get(id);
+        if (seen) return Math.round((Date.now() - seen) / 1000);
+        // 受信していない場合は画面側の時刻で判断（端末の時計のズレ分だけ誤差が出る）
+        return data?.at ? Math.round((Date.now() - data.at) / 1000) : Infinity;
+      }
+
+      function renderScreens() {
+        const box = document.getElementById("screen-status");
+        const active = [...screenDocs.entries()]
+          .map(([id, d]) => ({ id, d, age: screenAgeSec(id, d) }))
+          .filter((x) => x.age < 90)
+          .sort((a, b) => a.age - b.age);
+        if (active.length === 0) {
+          box.innerHTML = `<div class="qz-panel--pink p-3 text-xs font-bold" style="color:#c0392b">
+              メイン画面からの応答がありません。プロジェクターの PC でメイン画面を開いて「開始する」を押してください。
+            </div>`;
+          return;
+        }
+        box.innerHTML = active
+          .map(({ id, d, age }) => {
+            const stale = age > 45;
+            const m = d.media || { total: 0, ready: 0, issues: [] };
+            const mediaOk = m.total === 0 || (m.ready === m.total && !m.issues?.length);
+            const issues = (m.issues || [])
+              .map(
+                (i) =>
+                  `<li>Q${i.index + 1}: ${escapeHtml(i.message)}</li>`
+              )
+              .join("");
+            return `
+            <div class="qz-row p-3 space-y-1">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <strong style="color:${stale ? "#c0392b" : "var(--forest)"}">${
+                  stale ? "● 応答が途絶えています" : "● 稼働中"
+                }</strong>
+                <span class="text-xs qz-muted">最終応答 ${age} 秒前</span>
+                <span class="text-xs qz-muted">v${escapeHtml(d.version || "?")}</span>
+                ${
+                  d.version && d.version !== APP_VERSION
+                    ? `<span class="text-xs font-bold" style="color:#c0392b">古いバージョン（再読み込みしてください）</span>`
+                    : ""
+                }
+              </div>
+              <div class="text-xs flex flex-wrap gap-x-4 gap-y-1">
+                <span>音声: ${
+                  d.audioUnlocked
+                    ? '<strong style="color:var(--forest)">有効</strong>'
+                    : '<strong style="color:#c0392b">未開始（メイン画面で「開始する」を押す）</strong>'
+                }</span>
+                <span>動画: ${
+                  m.total === 0
+                    ? "なし"
+                    : `<strong style="color:${mediaOk ? "var(--forest)" : "#c0392b"}">${m.ready}/${m.total} 準備OK</strong>${
+                        m.loading ? `（読み込み中 ${m.loading} 件）` : ""
+                      }`
+                }</span>
+              </div>
+              ${issues ? `<ul class="text-xs pl-4 list-disc" style="color:#c0392b">${issues}</ul>` : ""}
+            </div>`;
+          })
+          .join("");
+      }
+
+      // ---- 自動締切/自動採点の表示更新 ----
       setInterval(() => {
         if (currentState?.status === "voting") renderStatus();
       }, 500);
 
+      function currentQuiz() {
+        if (!currentState) return null;
+        return quizzes.find((q) => q.id === currentState.currentQuizId) || null;
+      }
+
+      function showOpMessage(msg) {
+        const el = document.getElementById("op-message");
+        if (!msg) {
+          el.classList.add("hidden");
+          el.textContent = "";
+          return;
+        }
+        el.textContent = msg;
+        el.classList.remove("hidden");
+      }
+
       function renderStatus() {
         const el = document.getElementById("status-display");
         if (!currentState) return;
-        const quiz = quizzes.find((q) => q.id === currentState.currentQuizId);
-        const label =
-          {
-            waiting: "待機中",
-            voting: "回答受付中",
-            result: "結果表示",
-            final_ranking: "最終結果",
-          }[currentState.status] || currentState.status;
+        const quiz = currentQuiz();
+        const status = currentState.status;
+        const label = STATUS_LABELS[status] || status;
 
         let timerText = "";
-        if (currentState.status === "voting") {
+        if (status === "voting") {
           if (!currentState.durationMs) {
             timerText = ' / <strong class="text-[var(--coral)]">時間無制限（手動で締切）</strong>';
           } else if (currentState.votingStartedAt) {
@@ -389,10 +576,28 @@
               0,
               Math.ceil((currentState.durationMs - elapsed) / 1000)
             );
+            const what = isLiveQuiz(quiz) ? "自動で締切" : "自動採点";
             timerText =
               remaining > 0
-                ? ` / 残り ${remaining} 秒で自動採点`
-                : " / 自動採点中...";
+                ? ` / 残り ${remaining} 秒で${what}`
+                : ` / ${what}中...`;
+          }
+        }
+
+        let answerText = "";
+        if (quiz) {
+          const correct = correctIndexOf(quiz, currentState);
+          if (isLiveQuiz(quiz)) {
+            answerText =
+              status === "result" && Number.isInteger(correct)
+                ? `当日決定: <strong class="qz-coral">${choiceLetter(correct)}. ${escapeHtml(
+                    quiz.choices[correct]
+                  )}</strong>`
+                : `<strong class="qz-coral">当日決める問題</strong>（締切後に下のボタンで正解を選ぶ）`;
+          } else if (Number.isInteger(correct)) {
+            answerText = `正解: <strong>${choiceLetter(correct)}. ${escapeHtml(
+              quiz.choices[correct]
+            )}</strong>`;
           }
         }
 
@@ -405,20 +610,82 @@
                 )}`
               : "未設定"
           }</div>
+          ${answerText ? `<div>${answerText}</div>` : ""}
+          ${
+            quiz?.note
+              ? `<div class="text-xs pl-2" style="border-left:3px solid var(--coral)">メモ: ${escapeHtml(
+                  quiz.note
+                )}</div>`
+              : ""
+          }
           <div class="qz-muted">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
         `;
       }
 
       function updateControlButtons() {
         const start = document.getElementById("btn-start");
+        const close = document.getElementById("btn-close");
         const reveal = document.getElementById("btn-reveal");
+        const final = document.getElementById("btn-final");
         if (!currentState) return;
+        const status = currentState.status;
+        const quiz = currentQuiz();
+        const inQuestion = status === "voting" || status === "closed";
         const hasNext =
           quizzes.length > 0 &&
           currentState.currentQuizIndex + 1 < quizzes.length;
-        start.disabled = currentState.status === "voting" || !hasNext;
-        reveal.disabled = currentState.status !== "voting";
+        start.disabled = busy || inQuestion || !hasNext;
+        close.disabled = busy || status !== "voting";
+        // 当日決める問題は「正解を選ぶ」ボタンから発表する
+        reveal.disabled = busy || !inQuestion || !quiz || isLiveQuiz(quiz);
+        reveal.textContent =
+          quiz && isLiveQuiz(quiz) && inQuestion
+            ? "正解発表（下で選択）"
+            : "正解発表・採点";
+        // 採点前に最終結果へ飛ぶと、その問題の点が入らないので止める
+        final.disabled = busy || inQuestion;
       }
+
+      function renderLivePanel() {
+        const panel = document.getElementById("live-panel");
+        const quiz = currentQuiz();
+        const status = currentState?.status;
+        const show =
+          !!quiz && isLiveQuiz(quiz) && (status === "voting" || status === "closed");
+        panel.classList.toggle("hidden", !show);
+        if (!show) return;
+        const box = document.getElementById("live-choices");
+        const sig = `${quiz.id}|${quiz.choices.join("|")}|${busy}`;
+        if (box.dataset.sig === sig) return;
+        box.dataset.sig = sig;
+        box.innerHTML = quiz.choices
+          .map(
+            (c, i) => `
+            <button type="button" class="qz-btn" data-live-choice="${i}" ${
+              busy ? "disabled" : ""
+            } style="text-align:left;justify-content:flex-start;padding:12px 14px">
+              <strong style="color:var(--coral);margin-right:.5rem">${choiceLetter(i)}</strong>${escapeHtml(c)}
+            </button>`
+          )
+          .join("");
+      }
+
+      document.getElementById("live-choices").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-live-choice]");
+        if (!btn || btn.disabled) return;
+        const quiz = currentQuiz();
+        if (!quiz) return;
+        const i = parseInt(btn.dataset.liveChoice, 10);
+        const ok = confirm(
+          `正解は「${choiceLetter(i)}. ${quiz.choices[i]}」で発表します。\n\n` +
+            (currentState.status === "voting"
+              ? "まだ回答受付中です。回答を締め切ってから採点します。\n\n"
+              : "") +
+            "よろしいですか？（採点後は取り消せません）"
+        );
+        if (!ok) return;
+        runOp(() => revealAndScore(quiz, i));
+      });
 
       function renderTeams() {
         const list = document.getElementById("team-list");
@@ -435,9 +702,10 @@
               <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
               <input class="qz-input flex-1" style="min-width:120px;padding:6px 8px;font-size:14px"
                 value="${escapeHtml(t.name)}" data-action="rename" data-id="${t.id}">
-              <span class="qz-muted">スコア <span style="color:var(--coral);font-weight:700">${
-                t.score || 0
-              }</span></span>
+              <label class="qz-muted flex items-center gap-1">スコア
+                <input type="number" class="qz-input" style="width:4.5rem;padding:4px;text-align:center;font-weight:700;color:var(--coral)"
+                  value="${t.score || 0}" data-action="score" data-id="${t.id}">
+              </label>
               <span class="qz-muted">代表 ${
                 t.representative
                   ? `<span class="">${escapeHtml(
@@ -454,6 +722,39 @@
           .join("");
       }
 
+      // 動画 URL の種類。埋め込み系は事前読み込み・一時停止の制御ができない。
+      function videoKind(rawUrl) {
+        if (!rawUrl) return null;
+        try {
+          const host = new URL(rawUrl, location.href).hostname.replace(/^www\./, "");
+          if (host === "youtu.be" || host.endsWith("youtube.com")) return "YouTube";
+          if (host === "drive.google.com") return "Google Drive";
+          if (host.endsWith("vimeo.com")) return "Vimeo";
+        } catch {}
+        return "MP4";
+      }
+
+      function correctSelectHtml(q) {
+        const value = isLiveQuiz(q) ? "live" : String(q.correctIndex ?? 0);
+        const opts = [
+          ...q.choices.map((_, i) => [String(i), choiceLetter(i)]),
+          ["live", "当日決める"],
+        ];
+        return `
+          <label class="text-xs qz-muted flex items-center gap-1">
+            正解
+            <select class="qz-input" style="width:auto;padding:4px;font-size:14px"
+              data-action="correct" data-id="${q.id}">
+              ${opts
+                .map(
+                  ([v, l]) =>
+                    `<option value="${v}" ${v === value ? "selected" : ""}>${l}</option>`
+                )
+                .join("")}
+            </select>
+          </label>`;
+      }
+
       function renderQuizzes() {
         const list = document.getElementById("quiz-list");
         if (quizzes.length === 0) {
@@ -462,8 +763,10 @@
           return;
         }
         list.innerHTML = quizzes
-          .map(
-            (q, i) => `
+          .map((q, i) => {
+            const live = isLiveQuiz(q);
+            const kind = videoKind(q.videoUrl);
+            return `
           <div class="qz-row p-3">
             <div class="flex items-start gap-2">
               <span class="text-xs qz-muted font-mono">#${i + 1}</span>
@@ -491,31 +794,45 @@
                       class="qz-input" style="width:5rem;padding:4px;text-align:center">
                     秒
                   </label>
+                  ${correctSelectHtml(q)}
                   ${
                     q.durationSec
                       ? ""
                       : `<span class="text-[10px] px-1.5 py-0.5 font-bold" style="background:var(--coral);color:#fff">手動締切</span>`
                   }
-                </div>
-                <div class="text-xs qz-muted mt-1 flex flex-wrap gap-x-3">
-                  ${q.choices
-                    .map(
-                      (c, idx) =>
-                        `<span class="${
-                          idx === q.correctIndex
-                            ? "qz-coral"
-                            : ""
-                        }">${["A", "B", "C", "D"][idx]}. ${escapeHtml(c)}${
-                          idx === q.correctIndex ? " ✓" : ""
-                        }</span>`
-                    )
-                    .join("")}
                   ${
-                    q.videoUrl
-                      ? `<span class="">動画あり</span>`
+                    live
+                      ? `<span class="text-[10px] px-1.5 py-0.5 font-bold" style="background:var(--forest);color:#fff">当日決める</span>`
                       : ""
                   }
                 </div>
+                <div class="text-xs qz-muted mt-1 flex flex-wrap gap-x-3">
+                  ${q.choices
+                    .map((c, idx) => {
+                      const isCorrect = !live && idx === q.correctIndex;
+                      return `<span class="${isCorrect ? "qz-coral" : ""}">${choiceLetter(
+                        idx
+                      )}. ${escapeHtml(c)}${isCorrect ? " ✓" : ""}</span>`;
+                    })
+                    .join("")}
+                  ${
+                    live && Number.isInteger(q.liveCorrectIndex)
+                      ? `<span class="qz-coral">（本番で決定: ${choiceLetter(q.liveCorrectIndex)}）</span>`
+                      : ""
+                  }
+                  ${
+                    q.videoUrl
+                      ? `<span>動画あり（${kind}）</span>`
+                      : ""
+                  }
+                </div>
+                ${
+                  q.videoUrl && kind !== "MP4"
+                    ? `<div class="text-[10px] mt-1 font-bold" style="color:#c0392b">
+                         ※ ${kind} は外部プレイヤーのため、事前読み込み・一時停止の操作ができません。確実に流すなら MP4 に差し替えてください。
+                       </div>`
+                    : ""
+                }
                 ${
                   q.note
                     ? `<div class="text-[10px] qz-muted mt-1 pl-2" style="border-left:3px solid var(--coral)">
@@ -527,88 +844,156 @@
               <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
                 data-action="delete-quiz" data-id="${q.id}">削除</button>
             </div>
-          </div>`
-          )
+          </div>`;
+          })
           .join("");
+      }
+
+      // 操作のエラーを必ず画面に出す（黙って失敗させない）
+      async function runOp(fn) {
+        if (busy) return;
+        busy = true;
+        refreshAll();
+        try {
+          await fn();
+          showOpMessage(null);
+        } catch (err) {
+          console.error(err);
+          const msg = describeError(err);
+          showOpMessage("操作に失敗しました: " + msg);
+          alert("操作に失敗しました:\n" + msg);
+        } finally {
+          busy = false;
+          document.getElementById("live-choices").dataset.sig = "";
+          refreshAll();
+        }
+      }
+
+      async function guarded(fn) {
+        try {
+          await fn();
+        } catch (err) {
+          console.error(err);
+          alert("保存に失敗しました:\n" + describeError(err));
+        }
       }
 
       document
         .getElementById("team-list")
-        .addEventListener("click", async (e) => {
+        .addEventListener("click", (e) => {
           const action = e.target.dataset.action;
           const id = e.target.dataset.id;
           if (!action || !id) return;
           if (action === "delete") {
             if (confirm("このチームを削除しますか？")) {
-              await deleteDoc(refs.team(id));
+              guarded(() => deleteDoc(refs.team(id)));
             }
           } else if (action === "clear-rep") {
-            await updateDoc(refs.team(id), { representative: null });
+            guarded(() => updateDoc(refs.team(id), { representative: null }));
           }
         });
       document
         .getElementById("team-list")
-        .addEventListener("change", async (e) => {
-          if (e.target.dataset.action === "rename") {
-            await updateDoc(refs.team(e.target.dataset.id), {
-              name: e.target.value.trim(),
-            });
+        .addEventListener("change", (e) => {
+          const action = e.target.dataset.action;
+          const id = e.target.dataset.id;
+          if (action === "rename") {
+            guarded(() =>
+              updateDoc(refs.team(id), { name: e.target.value.trim() })
+            );
+          } else if (action === "score") {
+            const team = teams.find((t) => t.id === id);
+            const n = parseInt(e.target.value, 10);
+            if (!team || !Number.isFinite(n)) {
+              renderTeams();
+              return;
+            }
+            if (
+              !confirm(
+                `「${team.name}」の点数を ${team.score || 0} 点 → ${n} 点に修正しますか？`
+              )
+            ) {
+              renderTeams();
+              return;
+            }
+            guarded(() => updateDoc(refs.team(id), { score: n }));
           }
         });
 
       document
         .getElementById("quiz-list")
-        .addEventListener("click", async (e) => {
+        .addEventListener("click", (e) => {
           if (
             e.target.dataset.action === "delete-quiz" &&
             confirm("この問題を削除しますか？")
           ) {
-            await deleteDoc(refs.quiz(e.target.dataset.id));
+            guarded(() => deleteDoc(refs.quiz(e.target.dataset.id)));
           }
         });
 
       document
         .getElementById("quiz-list")
-        .addEventListener("change", async (e) => {
+        .addEventListener("change", (e) => {
           const action = e.target.dataset.action;
           const id = e.target.dataset.id;
           if (!id) return;
           if (action === "duration") {
             const seconds = parseDurationInput(e.target.value);
             e.target.value = seconds ?? "";
-            await updateDoc(refs.quiz(id), { durationSec: seconds });
+            guarded(() => updateDoc(refs.quiz(id), { durationSec: seconds }));
           } else if (action === "points") {
             const points = Math.max(
               1,
               Math.min(1000, parseInt(e.target.value, 10) || 10)
             );
             e.target.value = points;
-            await updateDoc(refs.quiz(id), { points });
+            guarded(() => updateDoc(refs.quiz(id), { points }));
+          } else if (action === "correct") {
+            const inQuestion =
+              currentState?.currentQuizId === id &&
+              (currentState.status === "voting" || currentState.status === "closed");
+            if (inQuestion) {
+              alert("出題中の問題は正解の種類を変更できません。採点後に変更してください。");
+              renderQuizzes();
+              return;
+            }
+            const v = e.target.value;
+            guarded(() =>
+              updateDoc(
+                refs.quiz(id),
+                v === "live"
+                  ? { answerMode: "live" }
+                  : { answerMode: "preset", correctIndex: parseInt(v, 10) }
+              )
+            );
           }
         });
 
       document
         .getElementById("team-form")
-        .addEventListener("submit", async (e) => {
+        .addEventListener("submit", (e) => {
           e.preventDefault();
-          const name = e.target.name.value.trim();
+          const form = e.target;
+          const name = form.name.value.trim();
           if (!name) return;
           const order =
             teams.length > 0
               ? Math.max(...teams.map((t) => t.order || 0)) + 1
               : 0;
-          await addDoc(refs.teams(), {
-            name,
-            score: 0,
-            representative: null,
-            order,
+          guarded(async () => {
+            await addDoc(refs.teams(), {
+              name,
+              score: 0,
+              representative: null,
+              order,
+            });
+            form.reset();
           });
-          e.target.reset();
         });
 
       document
         .getElementById("btn-seed-teams")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           if (
             !confirm(
               "デフォルトの 5 チームを作成します。既存のチームはそのまま残ります。"
@@ -627,12 +1012,23 @@
               order: base + i,
             });
           }
-          await batch.commit();
+          guarded(() => batch.commit());
         });
+
+      const STATE_CLEARED = {
+        status: "waiting",
+        currentQuizId: null,
+        currentQuizIndex: -1,
+        votingStartedAt: null,
+        scoredForQuizId: null,
+        revealedCorrectIndex: null,
+        scoredTeamIds: null,
+        closedAt: null,
+      };
 
       document
         .getElementById("btn-clear-teams")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           if (teams.length === 0) return;
           if (
             !confirm(
@@ -640,18 +1036,17 @@
             )
           )
             return;
-          const ansSnap = await getDocs(refs.answers());
-          const batch = writeBatch(db);
-          ansSnap.docs.forEach((d) => batch.delete(d.ref));
-          teams.forEach((t) => batch.delete(refs.team(t.id)));
-          batch.update(stateRef, {
-            status: "waiting",
-            currentQuizId: null,
-            currentQuizIndex: -1,
-            votingStartedAt: null,
-            scoredForQuizId: null,
+          guarded(async () => {
+            const ansSnap = await getDocs(refs.answers());
+            const batch = writeBatch(db);
+            ansSnap.docs.forEach((d) => batch.delete(d.ref));
+            teams.forEach((t) => batch.delete(refs.team(t.id)));
+            quizzes
+              .filter((q) => isLiveQuiz(q))
+              .forEach((q) => batch.update(refs.quiz(q.id), { liveCorrectIndex: null }));
+            batch.update(stateRef, STATE_CLEARED);
+            await batch.commit();
           });
-          await batch.commit();
         });
 
       // 当日のクイズシートをそのまま入れたサンプル。
@@ -762,23 +1157,25 @@
           question:
             "新郎が今から挑戦！「けん玉のもしかめをこれからやります。何回行くでしょう。」",
           choices: ["30回以下", "31〜50回", "51〜70回", "71回以上"],
-          correctIndex: 1,
+          answerMode: "live",
+          correctIndex: null,
           points: 30,
           durationSec: null,
           imageUrl: null,
           videoUrl: null,
-          note: "その場で新郎が実演！会場全体でカウント。実演後にMCが締切",
+          note: "回答締切 → 新郎が実演、会場全体でカウント → 結果の回数の選択肢を押して発表",
         },
         {
           question:
             "新婦が今から挑戦！「けん玉のもしかめをこれからやります。何回行くでしょう。」",
           choices: ["30回以下", "31〜50回", "51〜70回", "71回以上"],
-          correctIndex: 0,
+          answerMode: "live",
+          correctIndex: null,
           points: 30,
           durationSec: null,
           imageUrl: null,
           videoUrl: null,
-          note: "新郎新婦の仲良しエピソードとして正解発表",
+          note: "回答締切 → 新婦が実演 → 結果の回数の選択肢を押して発表。仲良しエピソードとして紹介",
         },
         {
           question:
@@ -811,7 +1208,7 @@
 
       document
         .getElementById("btn-seed-quizzes")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           if (
             !confirm(
               `サンプル ${SAMPLE_QUIZZES.length} 問を追加します。` +
@@ -831,7 +1228,9 @@
             batch.set(doc(refs.quizzes()), {
               question: q.question,
               choices: q.choices,
+              answerMode: q.answerMode || "preset",
               correctIndex: q.correctIndex,
+              liveCorrectIndex: null,
               points: q.points,
               durationSec: q.durationSec,
               imageUrl: q.imageUrl,
@@ -840,25 +1239,19 @@
               order: base + i,
             });
           });
-          await batch.commit();
+          guarded(() => batch.commit());
         });
 
       document
         .getElementById("btn-clear-quizzes")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           if (quizzes.length === 0) return;
           if (!confirm(`登録済みの ${quizzes.length} 問すべてを削除します。よろしいですか？`))
             return;
           const batch = writeBatch(db);
           quizzes.forEach((q) => batch.delete(refs.quiz(q.id)));
-          batch.update(stateRef, {
-            status: "waiting",
-            currentQuizId: null,
-            currentQuizIndex: -1,
-            votingStartedAt: null,
-            scoredForQuizId: null,
-          });
-          await batch.commit();
+          batch.update(stateRef, STATE_CLEARED);
+          guarded(() => batch.commit());
         });
 
       let currentImageDataUrl = null;
@@ -934,26 +1327,33 @@
 
       document
         .getElementById("quiz-form")
-        .addEventListener("submit", async (e) => {
+        .addEventListener("submit", (e) => {
           e.preventDefault();
-          const fd = new FormData(e.target);
+          const form = e.target;
+          const fd = new FormData(form);
           const order =
             quizzes.length > 0
               ? Math.max(...quizzes.map((q) => q.order || 0)) + 1
               : 0;
-          await addDoc(refs.quizzes(), {
-            question: fd.get("question").trim(),
-            choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
-            correctIndex: parseInt(fd.get("correctIndex"), 10),
-            points: parseInt(fd.get("points"), 10) || 10,
-            durationSec: parseDurationInput(fd.get("durationSec")),
-            imageUrl: currentImageDataUrl || null,
-            videoUrl: fd.get("videoUrl").trim() || null,
-            note: fd.get("note").trim() || null,
-            order,
+          const correctRaw = fd.get("correctIndex");
+          const live = correctRaw === "live";
+          guarded(async () => {
+            await addDoc(refs.quizzes(), {
+              question: fd.get("question").trim(),
+              choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
+              answerMode: live ? "live" : "preset",
+              correctIndex: live ? null : parseInt(correctRaw, 10),
+              liveCorrectIndex: null,
+              points: parseInt(fd.get("points"), 10) || 10,
+              durationSec: parseDurationInput(fd.get("durationSec")),
+              imageUrl: currentImageDataUrl || null,
+              videoUrl: fd.get("videoUrl").trim() || null,
+              note: fd.get("note").trim() || null,
+              order,
+            });
+            form.reset();
+            clearQuizImage();
           });
-          e.target.reset();
-          clearQuizImage();
         });
 
       // 空欄・0・不正値は「無制限（MCが手動で締切）」を意味する null にする。
@@ -963,9 +1363,11 @@
         return Math.max(5, Math.min(600, n));
       }
 
+      // ---- 進行 ----
+
       document
         .getElementById("btn-start")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           const nextIndex = (currentState?.currentQuizIndex ?? -1) + 1;
           if (nextIndex >= quizzes.length) {
             alert("次の問題がありません");
@@ -977,77 +1379,62 @@
           }
           const quiz = quizzes[nextIndex];
           const durationSec = parseDurationInput(quiz.durationSec);
-          await updateDoc(stateRef, {
-            status: "voting",
-            currentQuizId: quiz.id,
-            currentQuizIndex: nextIndex,
-            votingStartedAt: Date.now(),
-            // null = 無制限。タイマーを表示せず自動採点もしない。
-            durationMs: durationSec ? durationSec * 1000 : null,
-            videoPlaying: true,
-            videoCue: Date.now(),
+          runOp(async () => {
+            const now = Date.now();
+            await updateDoc(stateRef, {
+              status: "voting",
+              currentQuizId: quiz.id,
+              currentQuizIndex: nextIndex,
+              votingStartedAt: now,
+              // null = 無制限。タイマーを表示せず自動採点もしない。
+              durationMs: durationSec ? durationSec * 1000 : null,
+              closedAt: null,
+              revealedCorrectIndex: null,
+              scoredTeamIds: null,
+              videoPlaying: true,
+              videoSeekTo: null,
+              videoCmdAt: now,
+              videoCue: now,
+            });
           });
         });
 
-      async function doReveal() {
-        if (!currentState || currentState.status !== "voting") return;
-        const quizId = currentState.currentQuizId;
-        const quiz = quizzes.find((q) => q.id === quizId);
-        if (!quiz) return;
-        if (currentState.scoredForQuizId !== quizId) {
-          const ansSnap = await getDocs(
-            query(refs.answers(), where("quizId", "==", quizId))
-          );
-          const batch = writeBatch(db);
-          const teamMap = new Map(teams.map((t) => [t.id, t]));
-          const points = quiz.points || SCORE_PER_CORRECT;
-          ansSnap.docs.forEach((d) => {
-            const a = d.data();
-            if (a.choice === quiz.correctIndex) {
-              const team = teamMap.get(a.teamId);
-              if (team) {
-                batch.update(refs.team(a.teamId), {
-                  score: (team.score || 0) + points,
-                });
-              }
-            }
-          });
-          batch.update(stateRef, {
-            status: "result",
-            scoredForQuizId: quizId,
-          });
-          await batch.commit();
-        } else {
-          await updateDoc(stateRef, { status: "result" });
-        }
-      }
+      document.getElementById("btn-close").addEventListener("click", () => {
+        const quiz = currentQuiz();
+        if (!quiz || currentState?.status !== "voting") return;
+        runOp(() => closeVoting(quiz.id));
+      });
 
-      document.getElementById("btn-reveal").addEventListener("click", doReveal);
+      document.getElementById("btn-reveal").addEventListener("click", () => {
+        const quiz = currentQuiz();
+        if (!quiz || isLiveQuiz(quiz)) return;
+        runOp(() => revealAndScore(quiz, quiz.correctIndex));
+      });
 
-      let autoRevealInFlight = false;
-      setInterval(async () => {
-        if (!currentState || currentState.status !== "voting") {
-          autoRevealInFlight = false;
-          return;
-        }
-        if (autoRevealInFlight) return;
-        // durationMs が null（無制限）の問題は自動採点しない
-        if (!currentState.durationMs) return;
-        const elapsed =
-          Date.now() - (currentState.votingStartedAt || Date.now());
-        if (elapsed < currentState.durationMs) return;
-        autoRevealInFlight = true;
-        try {
-          await doReveal();
-        } finally {
-          autoRevealInFlight = false;
-        }
-      }, 500);
+      // 時間切れの処理: 事前に正解がある問題は自動採点、当日決める問題は自動で締切。
+      // 失敗したら（電波が悪い等）3 秒おきにやり直す。メイン画面も 2 秒遅れで同じ処理をする（保険）。
+      startAutoTimer({
+        getState: () => (busy ? null : currentState),
+        getQuizzes: () => quizzes,
+        graceMs: 0,
+        onOk: () => showOpMessage(null),
+        onError: (err) => {
+          console.error(err);
+          showOpMessage("時間切れの自動処理に失敗しました（3 秒後に再試行）: " + describeError(err));
+        },
+      });
 
       // 動画コントロール: state に指示を書き、main.html が反映する。
       // videoCmdAt は「同じボタンを連続で押しても main に届く」ための単調増加の印。
-      async function sendVideoCmd(patch) {
-        await updateDoc(stateRef, { ...patch, videoCmdAt: Date.now() });
+      // videoSeekTo は毎回書き直す（前の「頭から再生」が後の操作で再適用されないように）。
+      function sendVideoCmd(patch) {
+        guarded(() =>
+          updateDoc(stateRef, {
+            videoSeekTo: null,
+            ...patch,
+            videoCmdAt: Date.now(),
+          })
+        );
       }
 
       document
@@ -1064,14 +1451,18 @@
       document
         .getElementById("btn-video-unmute")
         .addEventListener("click", () => sendVideoCmd({ videoMuted: false }));
+      document
+        .getElementById("btn-video-mute")
+        .addEventListener("click", () => sendVideoCmd({ videoMuted: true }));
 
       function renderVideoControls() {
         const box = document.getElementById("video-controls");
         if (!currentState) return;
-        const quiz = quizzes.find((q) => q.id === currentState.currentQuizId);
+        const quiz = currentQuiz();
+        const status = currentState.status;
         const show =
           !!quiz?.videoUrl &&
-          (currentState.status === "voting" || currentState.status === "result");
+          (status === "voting" || status === "closed" || status === "result");
         box.classList.toggle("hidden", !show);
         if (!show) return;
         const label = document.getElementById("video-state");
@@ -1082,36 +1473,41 @@
 
       document
         .getElementById("btn-final")
-        .addEventListener("click", async () => {
-          await updateDoc(stateRef, { status: "final_ranking" });
+        .addEventListener("click", () => {
+          runOp(() => updateDoc(stateRef, { status: "final_ranking" }));
         });
 
       document
         .getElementById("btn-reset")
-        .addEventListener("click", async () => {
+        .addEventListener("click", () => {
           if (
             !confirm(
               "スコアと回答をリセットします。問題とチームは残ります。よろしいですか？"
             )
           )
             return;
-          const ansSnap = await getDocs(refs.answers());
-          const batch = writeBatch(db);
-          ansSnap.docs.forEach((d) => batch.delete(d.ref));
-          teams.forEach((t) =>
-            batch.update(refs.team(t.id), { score: 0, representative: null })
-          );
-          batch.update(stateRef, {
-            status: "waiting",
-            currentQuizId: null,
-            currentQuizIndex: -1,
-            votingStartedAt: null,
-            scoredForQuizId: null,
-            videoPlaying: true,
-            videoMuted: true,
-            videoSeekTo: null,
+          runOp(async () => {
+            const ansSnap = await getDocs(refs.answers());
+            const batch = writeBatch(db);
+            ansSnap.docs.forEach((d) => batch.delete(d.ref));
+            teams.forEach((t) =>
+              batch.update(refs.team(t.id), { score: 0, representative: null })
+            );
+            // リハーサルで決めた「当日の正解」を本番に持ち越さない
+            quizzes
+              .filter((q) => isLiveQuiz(q))
+              .forEach((q) =>
+                batch.update(refs.quiz(q.id), { liveCorrectIndex: null })
+              );
+            batch.update(stateRef, {
+              ...STATE_CLEARED,
+              videoPlaying: true,
+              videoMuted: false,
+              videoSeekTo: null,
+              videoCmdAt: Date.now(),
+            });
+            await batch.commit();
           });
-          await batch.commit();
         });
     </script>
   </body>

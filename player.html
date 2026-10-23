@@ -7,14 +7,14 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>解答者 - Wedding Quiz</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- フォントは読み込めなくても表示を止めない（media=print → onload で適用） -->
     <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
+      rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -41,6 +41,8 @@
         font-size: 1.25rem;
       }
     </style>
+    <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
+    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -48,17 +50,24 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js"></script>
+    <script src="env.js?v=20261023a"></script>
     <script type="module">
       import {
         ensureSignedIn,
         envError,
         refs,
+        APP_ID,
+        APP_VERSION,
         TEAM_COLORS,
         escapeHtml,
         renderSetupError,
-      } from "./js/firebase-init.js";
-      import {
+        describeError,
+        mountConnectionBanner,
+        mountRehearsalBadge,
+        safeStorage,
+        isLiveQuiz,
+        correctIndexOf,
+        choiceLetter,
         onSnapshot,
         setDoc,
         updateDoc,
@@ -67,19 +76,19 @@
         getDoc,
         query,
         orderBy,
-      } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+      } from "./js/firebase-init.js?v=20261023a";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
       const params = new URLSearchParams(location.search);
       // チームは URL の ?team= か、localStorage に保存した参加履歴で決まる。
       // どちらも無ければチーム名入力フォームを出して自己登録させる。
-      const JOIN_KEY = "enkai:joinedTeam";
-      let teamId = params.get("team") || localStorage.getItem(JOIN_KEY) || null;
+      // キーは APP_ID ごとに分ける（リハーサルの参加情報が本番に残らないように）。
+      const JOIN_KEY = `enkai:${APP_ID}:joinedTeam`;
+      let teamId = params.get("team") || safeStorage.get(JOIN_KEY) || null;
 
-      const APP_VERSION = "v2";
       function debug(msg) {
-        if (debugEl) debugEl.textContent = `${APP_VERSION} [${new Date().toLocaleTimeString()}] ${msg}`;
+        if (debugEl) debugEl.textContent = `v${APP_VERSION} [${new Date().toLocaleTimeString()}] ${msg}`;
       }
       debug("スクリプト読み込み完了");
 
@@ -95,20 +104,23 @@
         throw new Error(envError);
       }
 
+      const conn = mountConnectionBanner({ compact: true });
+      mountRehearsalBadge();
+
       try {
         const user = await ensureSignedIn();
         debug(`認証OK / UID: ${user.uid.slice(0, 6)}`);
       } catch (err) {
         debug(`認証失敗: ${err.message}`);
-        renderSetupError(root, err.message || String(err));
+        renderSetupError(root, describeError(err));
         throw err;
       }
 
       let repKey = null;
       function setTeam(id) {
         teamId = id;
-        repKey = `enkai:team:${id}:rep`;
-        localStorage.setItem(JOIN_KEY, id);
+        repKey = `enkai:${APP_ID}:team:${id}:rep`;
+        safeStorage.set(JOIN_KEY, id);
       }
 
       // 保存済みチームが削除・リセット済みなら参加情報を捨ててフォームに戻す。
@@ -117,7 +129,7 @@
           const snap = await getDoc(refs.team(teamId));
           if (!snap.exists()) {
             debug(`保存チームが存在しない: ${teamId}`);
-            localStorage.removeItem(JOIN_KEY);
+            safeStorage.remove(JOIN_KEY);
             teamId = null;
           }
         } catch (err) {
@@ -134,8 +146,8 @@
             return;
           }
           const choice = parseInt(choiceBtn.dataset.choice, 10);
-          const repName = localStorage.getItem(repKey);
-          debug(`タップ検知: ${String.fromCharCode(65 + choice)} (choice=${choice})`);
+          const repName = safeStorage.get(repKey);
+          debug(`タップ検知: ${choiceLetter(choice)} (choice=${choice})`);
           if (!repName) {
             debug("代表者名が未登録");
             return;
@@ -145,15 +157,15 @@
         }
         if (e.target.id === "btn-change-rep") {
           if (confirm("代表者名を変更しますか？")) {
-            localStorage.removeItem(repKey);
+            safeStorage.remove(repKey);
             render();
           }
           return;
         }
         if (e.target.id === "btn-leave-team") {
           if (!confirm("別のチームで参加し直しますか？")) return;
-          if (repKey) localStorage.removeItem(repKey);
-          localStorage.removeItem(JOIN_KEY);
+          if (repKey) safeStorage.remove(repKey);
+          safeStorage.remove(JOIN_KEY);
           if (teamUnsub) {
             teamUnsub();
             teamUnsub = null;
@@ -179,13 +191,13 @@
           try {
             const id = await joinTeam(teamName, rep);
             setTeam(id);
-            localStorage.setItem(repKey, rep);
+            safeStorage.set(repKey, rep);
             startTeamSubscription();
             syncQuizSubscriptions();
             debug(`参加OK: ${teamName} (${id})`);
           } catch (err) {
             debug(`参加失敗: ${err.message}`);
-            alert("参加に失敗: " + err.message);
+            alert("参加に失敗しました: " + describeError(err));
             btn.disabled = false;
             btn.textContent = "このチームで参加する";
           }
@@ -196,14 +208,14 @@
           const rep = e.target.rep.value.trim();
           if (!rep) return;
           debug(`代表者登録: ${rep}`);
-          localStorage.setItem(repKey, rep);
+          safeStorage.set(repKey, rep);
           try {
             await updateDoc(refs.team(teamId), { representative: rep });
             debug(`代表者書き込みOK: ${rep}`);
             render();
           } catch (err) {
             debug(`代表者書き込み失敗: ${err.message}`);
-            alert("代表者登録に失敗: " + err.message);
+            alert("代表者登録に失敗しました: " + describeError(err));
           }
         }
       });
@@ -248,31 +260,41 @@
 
       function startTeamSubscription() {
         if (teamUnsub) teamUnsub();
-        teamUnsub = onSnapshot(refs.team(teamId), (snap) => {
-          if (!snap.exists()) {
-            // 司会者が削除／リセットした場合は参加フォームに戻す
-            debug("チームが削除されました");
-            localStorage.removeItem(JOIN_KEY);
-            store.team = null;
-            teamId = null;
-            if (teamUnsub) teamUnsub();
-            teamUnsub = null;
-            renderJoinForm();
-            return;
-          }
-          store.team = { id: snap.id, ...snap.data() };
-          render();
-        });
+        teamUnsub = onSnapshot(
+          refs.team(teamId),
+          (snap) => {
+            if (!snap.exists()) {
+              // 司会者が削除／リセットした場合は参加フォームに戻す
+              debug("チームが削除されました");
+              safeStorage.remove(JOIN_KEY);
+              store.team = null;
+              teamId = null;
+              if (teamUnsub) teamUnsub();
+              teamUnsub = null;
+              renderJoinForm();
+              return;
+            }
+            store.team = { id: snap.id, ...snap.data() };
+            render();
+          },
+          (err) => conn.error(err)
+        );
       }
 
       if (teamId) startTeamSubscription();
       else renderJoinForm();
 
-      onSnapshot(refs.state(), (snap) => {
-        store.state = snap.exists() ? snap.data() : null;
-        syncQuizSubscriptions();
-        render();
-      });
+      onSnapshot(
+        refs.state(),
+        { includeMetadataChanges: true },
+        (snap) => {
+          conn.report(snap);
+          store.state = snap.exists() ? snap.data() : null;
+          syncQuizSubscriptions();
+          render();
+        },
+        (err) => conn.error(err)
+      );
 
       function syncQuizSubscriptions() {
         const quizId = store.state?.currentQuizId || null;
@@ -291,132 +313,29 @@
         store.quiz = null;
         store.answer = null;
         if (!quizId || !teamId) return;
-        quizUnsub = onSnapshot(refs.quiz(quizId), (qsnap) => {
-          store.quiz = qsnap.exists()
-            ? { id: qsnap.id, ...qsnap.data() }
-            : null;
-          render();
-        });
+        quizUnsub = onSnapshot(
+          refs.quiz(quizId),
+          (qsnap) => {
+            store.quiz = qsnap.exists()
+              ? { id: qsnap.id, ...qsnap.data() }
+              : null;
+            render();
+          },
+          (err) => conn.error(err)
+        );
         answerUnsub = onSnapshot(
           refs.answer(`${quizId}_${teamId}`),
           (asnap) => {
             store.answer = asnap.exists() ? asnap.data() : null;
             render();
-          }
+          },
+          (err) => conn.error(err)
         );
       }
 
       function teamColor() {
         const idx = store.team?.order ?? 0;
         return TEAM_COLORS[idx % TEAM_COLORS.length];
-      }
-
-      function parseYouTubeTime(value) {
-        if (!value) return null;
-        if (/^\d+$/.test(value)) return value;
-        const match = String(value).match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
-        if (!match) return null;
-        const seconds =
-          (parseInt(match[1] || "0", 10) * 3600) +
-          (parseInt(match[2] || "0", 10) * 60) +
-          parseInt(match[3] || "0", 10);
-        return seconds > 0 ? String(seconds) : null;
-      }
-
-      function youtubeEmbedUrl(rawUrl) {
-        try {
-          const url = new URL(rawUrl);
-          const host = url.hostname.replace(/^www\./, "");
-          let id = null;
-          if (host === "youtu.be") {
-            id = url.pathname.split("/").filter(Boolean)[0];
-          } else if (host.endsWith("youtube.com")) {
-            if (url.pathname === "/watch") {
-              id = url.searchParams.get("v");
-            } else {
-              const parts = url.pathname.split("/").filter(Boolean);
-              if (["embed", "shorts", "live"].includes(parts[0])) id = parts[1];
-            }
-          }
-          if (!id) return null;
-          const embed = new URL(
-            `https://www.youtube.com/embed/${encodeURIComponent(id)}`
-          );
-          embed.searchParams.set("autoplay", "1");
-          embed.searchParams.set("mute", "1");
-          embed.searchParams.set("controls", "1");
-          embed.searchParams.set("playsinline", "1");
-          embed.searchParams.set("rel", "0");
-          if (window.location.origin.startsWith("http")) {
-            embed.searchParams.set("origin", window.location.origin);
-          }
-          const start = parseYouTubeTime(
-            url.searchParams.get("start") || url.searchParams.get("t")
-          );
-          if (start) embed.searchParams.set("start", start);
-          return embed.toString();
-        } catch {
-          return null;
-        }
-      }
-
-      function googleDriveEmbedUrl(rawUrl) {
-        try {
-          const url = new URL(rawUrl);
-          if (url.hostname !== "drive.google.com") return null;
-          const match = url.pathname.match(/\/file\/d\/([^/]+)/);
-          const id = match?.[1] || url.searchParams.get("id");
-          return id
-            ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`
-            : null;
-        } catch {
-          return null;
-        }
-      }
-
-      function vimeoEmbedUrl(rawUrl) {
-        try {
-          const url = new URL(rawUrl);
-          if (!url.hostname.replace(/^www\./, "").endsWith("vimeo.com")) return null;
-          const id = url.pathname
-            .split("/")
-            .filter(Boolean)
-            .find((part) => /^\d+$/.test(part));
-          return id
-            ? `https://player.vimeo.com/video/${id}?autoplay=1&muted=1`
-            : null;
-        } catch {
-          return null;
-        }
-      }
-
-      function directVideoUrl(rawUrl) {
-        try {
-          const url = new URL(rawUrl);
-          if (url.hostname.endsWith("dropbox.com")) {
-            url.hostname = "dl.dropboxusercontent.com";
-            url.searchParams.delete("dl");
-            return url.toString();
-          }
-          return rawUrl;
-        } catch {
-          return rawUrl;
-        }
-      }
-
-      function videoHtml(rawUrl) {
-        if (!rawUrl) return "";
-        const youtubeUrl = youtubeEmbedUrl(rawUrl);
-        if (youtubeUrl) {
-          return `<iframe src="${escapeHtml(youtubeUrl)}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
-        }
-        const embedUrl = googleDriveEmbedUrl(rawUrl) || vimeoEmbedUrl(rawUrl);
-        if (embedUrl) {
-          return `<iframe src="${escapeHtml(embedUrl)}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
-        }
-        return `<video src="${escapeHtml(directVideoUrl(rawUrl))}" class="w-full aspect-video bg-black" style="border:2px solid var(--forest)" controls autoplay muted playsinline preload="metadata">
-          この動画URLはブラウザで再生できません。
-        </video>`;
       }
 
       function headerHtml(repName) {
@@ -520,7 +439,7 @@
           return;
         }
         if (!store.team || !store.state) return;
-        const savedRep = localStorage.getItem(repKey);
+        const savedRep = safeStorage.get(repKey);
         if (!savedRep) {
           votingRenderKey = null;
           // 同じ理由で、代表者名フォームも入力中は再描画しない
@@ -528,9 +447,9 @@
           return;
         }
         const status = store.state.status;
-        if (status === "voting") {
-          // 同じ問題の投票中は全再描画せず選択状態のみ更新（動画 iframe を壊さないため）
-          const key = `${store.state.currentQuizId || ""}:${
+        if (status === "voting" || status === "closed") {
+          // 同じ問題・同じステータスの間は全再描画せず選択状態のみ更新
+          const key = `${store.state.currentQuizId || ""}:${status}:${
             store.quiz ? "q" : "l"
           }`;
           if (key === votingRenderKey && document.getElementById("choices")) {
@@ -575,6 +494,7 @@
 
       // 無制限のときは Infinity を返し、時間切れ判定に引っかからないようにする
       function remainingSec() {
+        if (store.state?.status === "closed") return 0;
         if (isUnlimited()) return Infinity;
         const elapsed =
           Date.now() - (store.state.votingStartedAt || Date.now());
@@ -584,7 +504,12 @@
         );
       }
 
+      function isLocked() {
+        return store.state?.status !== "voting" || remainingSec() === 0;
+      }
+
       function timerLabel(remaining) {
+        if (store.state?.status === "closed") return "締切";
         return remaining === Infinity ? "受付中" : String(remaining);
       }
 
@@ -600,7 +525,7 @@
         const quiz = store.quiz;
         const remaining = remainingSec();
         const answered = !!store.answer;
-        const locked = remaining === 0;
+        const locked = isLocked();
 
         root.innerHTML =
           headerHtml(repName) +
@@ -625,7 +550,11 @@
             <h1 class="qz-jp-head text-lg leading-snug">${escapeHtml(
               quiz.question
             )}</h1>
-            ${videoHtml(quiz.videoUrl)}
+            ${
+              quiz.videoUrl
+                ? `<p class="qz-panel--pink p-3 text-xs text-center font-bold">▶ 動画はメイン画面（スクリーン）をご覧ください</p>`
+                : ""
+            }
             ${
               quiz.imageUrl
                 ? `<img src="${quiz.imageUrl}" class="w-full max-h-72 object-contain" style="border:2px solid var(--forest)" />`
@@ -642,7 +571,7 @@
                 selected ? " qz-choice--selected" : ""
               }${dim ? " qz-choice--dim" : ""}"
                 data-choice="${i}" ${locked ? "disabled" : ""}>
-                <span class="qz-choice__key">${String.fromCharCode(65 + i)}</span>
+                <span class="qz-choice__key">${choiceLetter(i)}</span>
                 <span class="qz-choice__body">${escapeHtml(c)}</span>
               </button>`;
               })
@@ -653,19 +582,26 @@
       }
 
       function voteStatusHtml(answered, remaining) {
+        const closed = store.state?.status === "closed";
         if (answered) {
           return `<div class="qz-panel--pink p-3 text-center text-sm">
-                  現在の選択:
-                  <strong>${String.fromCharCode(
-                    65 + store.answer.choice
-                  )}. ${escapeHtml(
+                  ${closed ? "あなたの回答" : "現在の選択"}:
+                  <strong>${choiceLetter(store.answer.choice)}. ${escapeHtml(
             store.quiz.choices[store.answer.choice]
           )}</strong>${
-            remaining > 0
+            !closed && remaining > 0
               ? ' <span class="text-[11px] qz-muted">(時間内は変更OK)</span>'
               : ""
           }
+                  ${
+                    closed
+                      ? '<div class="text-[11px] qz-muted mt-1">回答を締め切りました。正解発表をお待ちください</div>'
+                      : ""
+                  }
                 </div>`;
+        }
+        if (closed) {
+          return `<div class="qz-panel p-3 text-center text-sm qz-onDark-muted">回答締切（未回答）</div>`;
         }
         if (remaining === 0) {
           return `<div class="qz-panel p-3 text-center text-sm qz-onDark-muted">時間切れ</div>`;
@@ -677,7 +613,7 @@
         if (!store.quiz) return;
         const remaining = remainingSec();
         const answered = !!store.answer;
-        const locked = remaining === 0;
+        const locked = isLocked();
         document
           .querySelectorAll("#choices button[data-choice]")
           .forEach((btn) => {
@@ -694,8 +630,9 @@
       function renderResult(repName) {
         const quiz = store.quiz;
         const answered = store.answer;
+        const correct = correctIndexOf(quiz, store.state);
         const isCorrect =
-          quiz && answered && answered.choice === quiz.correctIndex;
+          quiz && answered && Number.isInteger(correct) && answered.choice === correct;
         const headline = !answered
           ? "No answer"
           : isCorrect
@@ -712,21 +649,21 @@
               !answered ? "未回答" : isCorrect ? "正解！" : "残念…"
             }</p>
             ${
-              quiz
+              quiz && Number.isInteger(correct)
                 ? `<div class="qz-panel--pink p-3 text-sm">
                     正解:
-                    <strong>${String.fromCharCode(
-                      65 + quiz.correctIndex
-                    )}. ${escapeHtml(quiz.choices[quiz.correctIndex])}</strong>
+                    <strong>${choiceLetter(correct)}. ${escapeHtml(
+                      quiz.choices[correct]
+                    )}</strong>
                   </div>`
                 : ""
             }
             ${
               answered
                 ? `<div class="text-xs qz-muted">
-                    あなたの回答: ${String.fromCharCode(
-                      65 + answered.choice
-                    )}. ${escapeHtml(quiz?.choices?.[answered.choice] || "")}
+                    あなたの回答: ${choiceLetter(answered.choice)}. ${escapeHtml(
+                      quiz?.choices?.[answered.choice] || ""
+                    )}
                   </div>`
                 : ""
             }
@@ -784,10 +721,10 @@
           return;
         }
         store.submitting = true;
-        const letter = String.fromCharCode(65 + choice);
+        const letter = choiceLetter(choice);
         debug(
           store.answer
-            ? `変更: ${String.fromCharCode(65 + store.answer.choice)} → ${letter}`
+            ? `変更: ${choiceLetter(store.answer.choice)} → ${letter}`
             : `送信: ${letter}`
         );
         const quizId = store.state.currentQuizId;
@@ -803,7 +740,7 @@
         } catch (err) {
           console.error(err);
           debug(`送信失敗: ${err.code || ""} ${err.message}`);
-          alert("送信に失敗: " + err.message);
+          alert("送信に失敗しました: " + describeError(err));
         } finally {
           store.submitting = false;
         }
@@ -822,11 +759,7 @@
         if (!store.answer) {
           debug(`投票中 残${remaining}s answer=${!!store.answer} submitting=${store.submitting}`);
         }
-        if (remaining === 0 && !store.answer) {
-          document
-            .querySelectorAll("#choices button")
-            .forEach((btn) => (btn.disabled = true));
-        }
+        if (remaining === 0) updateVotingSelection();
       }, 1000);
     </script>
   </body>

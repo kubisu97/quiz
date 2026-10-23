@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wedding Quiz</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- フォントは読み込めなくても表示を止めない（media=print → onload で適用） -->
     <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
+      rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
     <style>
       /* index.html 固有 */
       /* 入口カードは参照元のハードシャドウを押し込みアニメーションに使う */
@@ -29,6 +29,8 @@
         box-shadow: 6px 6px 0 0 var(--pink);
       }
     </style>
+    <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
+    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
   </head>
   <body>
     <main class="max-w-4xl mx-auto px-6 py-14">
@@ -53,21 +55,21 @@
       </header>
 
       <nav class="grid sm:grid-cols-3 gap-7">
-        <a href="admin.html" class="qz-card qz-entry p-5">
+        <a href="admin.html" data-page class="qz-card qz-entry p-5">
           <div class="qz-label" style="color: var(--coral)">Host</div>
           <div class="qz-jp-head text-lg mt-2">管理画面</div>
           <p class="text-xs qz-muted mt-2 leading-relaxed">
             チーム・問題の編集、<br />進行操作、動画コントロール
           </p>
         </a>
-        <a href="main.html" class="qz-card qz-entry p-5">
+        <a href="main.html" data-page class="qz-card qz-entry p-5">
           <div class="qz-label" style="color: var(--coral)">Projector</div>
           <div class="qz-jp-head text-lg mt-2">メイン画面</div>
           <p class="text-xs qz-muted mt-2 leading-relaxed">
             QR 表示、問題・タイマー、<br />正解発表・ランキング
           </p>
         </a>
-        <a href="player.html" class="qz-card qz-entry p-5">
+        <a href="player.html" data-page class="qz-card qz-entry p-5">
           <div class="qz-label" style="color: var(--coral)">Player</div>
           <div class="qz-jp-head text-lg mt-2">解答画面</div>
           <p class="text-xs qz-muted mt-2 leading-relaxed">
@@ -80,17 +82,28 @@
       <div id="error-slot"></div>
     </main>
 
-    <script src="env.js" onerror="window.__ENV_LOAD_FAILED__ = true"></script>
+    <script src="env.js?v=20261023a" onerror="window.__ENV_LOAD_FAILED__ = true"></script>
     <script type="module">
       import {
         ensureSignedIn,
         envError,
         APP_ID,
+        APP_VERSION,
+        IS_REHEARSAL,
         renderSetupError,
-      } from "./js/firebase-init.js";
+        describeError,
+        mountRehearsalBadge,
+        withAppParam,
+      } from "./js/firebase-init.js?v=20261023a";
 
       const statusEl = document.getElementById("status");
       const errorSlot = document.getElementById("error-slot");
+
+      // リハーサル中は各画面へのリンクにも ?app= を引き継ぐ
+      document.querySelectorAll("a[data-page]").forEach((a) => {
+        a.href = withAppParam(a.getAttribute("href"));
+      });
+      mountRehearsalBadge();
 
       if (envError) {
         renderSetupError(errorSlot, envError);
@@ -99,13 +112,12 @@
         statusEl.textContent = "接続中...";
         try {
           const user = await ensureSignedIn();
-          statusEl.textContent = `接続済 / AppID: ${APP_ID} / UID: ${user.uid.slice(
-            0,
-            8
-          )}`;
+          statusEl.textContent = `接続済 / AppID: ${APP_ID}${
+            IS_REHEARSAL ? "（リハーサル）" : ""
+          } / UID: ${user.uid.slice(0, 8)} / v${APP_VERSION}`;
         } catch (err) {
           console.error(err);
-          renderSetupError(errorSlot, err.message || String(err));
+          renderSetupError(errorSlot, describeError(err));
           statusEl.textContent = "Firebase: 接続失敗";
         }
       }
