@@ -15,7 +15,7 @@ import {
   where,
   runTransaction,
   increment,
-} from "../vendor/firebase.js?v=20261027a";
+} from "../vendor/firebase.js?v=20261027b";
 
 export {
   doc,
@@ -34,10 +34,10 @@ export {
   runTransaction,
   increment,
   serverTimestamp,
-} from "../vendor/firebase.js?v=20261027a";
+} from "../vendor/firebase.js?v=20261027b";
 
 // 画面の隅に出すバージョン。デプロイが反映されたかの確認に使う。
-export const APP_VERSION = "2026.10.27a";
+export const APP_VERSION = "2026.10.27b";
 
 const env = typeof window !== "undefined" ? window.__ENV__ : null;
 
@@ -121,14 +121,16 @@ export const refs = {
 //   waiting       … 待機（開始前のタイトル・スコア表示）
 //   intro         … 参加方法の説明（クイズ開始前）
 //   join          … 参加受付（チームごとの QR と受付状況）
+//   explain       … ジャンル説明（説明のある問題の出題前。explainQuizId がその問題）
 //   voting        … 回答受付中
 //   closed        … 回答締切（採点前。当日決める問題はここで正解を選ぶ）
-//   result        … 正解発表
+//   result        … 正解発表（answerVideoPending の間は正解発表の動画を流し、正解は伏せる）
 //   final_ranking … 最終結果
 export const STATUS_LABELS = {
   waiting: "待機中",
   intro: "参加方法の説明",
   join: "参加受付（QR 表示）",
+  explain: "ジャンル説明（出題前）",
   voting: "回答受付中",
   closed: "回答締切（正解発表前）",
   result: "正解発表",
@@ -139,6 +141,12 @@ export const STATUS_LABELS = {
 // liveCorrectIndex に保存する（リセットで消える）。
 export function isLiveQuiz(quiz) {
   return quiz?.answerMode === "live";
+}
+
+// 時間切れで自動採点せず、締切だけする問題。
+// 当日決める問題と、正解発表の動画がある問題（司会者が前振りしてから流す）。
+export function revealsManually(quiz) {
+  return isLiveQuiz(quiz) || !!quiz?.answerVideoUrl;
 }
 
 // 表示・判定に使う正解。採点済みの問題は採点時に確定した正解を優先する。
@@ -219,17 +227,50 @@ export async function revealAndScore(quiz, correct) {
     if (isLiveQuiz(quiz)) {
       tx.update(refs.quiz(quizId), { liveCorrectIndex: correct });
     }
+    // 正解発表の動画がある問題は、点は先に入れておき、動画が終わるまで正解を伏せる
+    const answerVideo = !!quiz.answerVideoUrl;
     tx.update(stateRef, {
       status: "result",
       scoredForQuizId: quizId,
       revealedCorrectIndex: correct,
       scoredTeamIds: scored,
       scoredPoints: points,
+      answerVideoPending: answerVideo,
+      ...(answerVideo
+        ? { videoPlaying: true, videoSeekTo: null, videoCmdAt: Date.now() }
+        : {}),
     });
   });
 }
 
-// 時間切れの処理: 事前に正解がある問題は自動採点、当日決める問題は自動で締切。
+// 正解発表の動画が終わった（または司会者が飛ばした）ので正解を出す
+export async function finishAnswerVideo(quizId) {
+  const stateRef = refs.state();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(stateRef);
+    const s = snap.data();
+    if (!s || s.currentQuizId !== quizId || s.status !== "result" || !s.answerVideoPending)
+      return;
+    tx.update(stateRef, { answerVideoPending: false });
+  });
+}
+
+// ジャンル説明。先頭の【〇〇の説明】を見出しに使い、無ければジャンル名から作る。
+export function explainParts(quiz) {
+  const text = String(quiz?.explain ?? "").trim();
+  const m = text.match(/^【([^】]+)】\s*/);
+  const genre = String(quiz?.genre ?? "").trim();
+  const title = m
+    ? m[1].replace(/の説明$/, "")
+    : genre
+    ? genre.endsWith("クイズ")
+      ? genre
+      : `${genre}クイズ`
+    : "次のクイズ";
+  return { title, body: m ? text.slice(m[0].length) : text };
+}
+
+// 時間切れの処理: 事前に正解がある問題は自動採点、当日決める問題・正解動画のある問題は自動で締切。
 // graceMs だけ締切時刻を過ぎてから動く（メイン画面は管理画面より少し遅らせて保険にする）。
 export function startAutoTimer({ getState, getQuizzes, graceMs = 0, onError, onOk }) {
   let inFlight = false;
@@ -244,7 +285,7 @@ export function startAutoTimer({ getState, getQuizzes, graceMs = 0, onError, onO
     if (!quiz) return;
     inFlight = true;
     try {
-      if (isLiveQuiz(quiz)) await closeVoting(quiz.id);
+      if (revealsManually(quiz)) await closeVoting(quiz.id);
       else await revealAndScore(quiz, quiz.correctIndex);
       onOk?.();
     } catch (err) {

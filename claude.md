@@ -21,17 +21,18 @@ index.html: エントランス（解答者、メイン、管理への分岐）
 
 player.html: 解答者用（チーム別 QR で開く -> チーム全員の名前を入れて OK -> 回答ボタン -> 結果待ち）。?team= が無いときは登録済みチームの一覧から選ぶ。動画はスマホには出さない（メイン画面で見てもらう）
 
-main.html: プロジェクター用（開始ボタン -> 参加方法の説明 -> チーム別 QR と受付状況 -> 問題・タイマー -> 締切 -> 正解発表 -> ランキング）
+main.html: プロジェクター用（開始ボタン -> 参加方法の説明 -> チーム別 QR と受付状況 -> ジャンル説明 -> 問題・タイマー -> 締切 -> 正解発表（正解動画） -> ランキング）
 
-admin.html: 管理画面（チーム＝代表者名の登録、問題作成、進行コントロール、当日の正解選択、メイン画面の状態確認、リセット）
+admin.html: 管理画面（チーム＝代表者名の登録、問題の作成・編集・シートからの貼り付け取り込み、進行コントロール、当日の正解選択、メイン画面の状態確認、リセット）。
+問題文は個人名を含むのでソースに書かず、当日のクイズシートを「シートから貼り付け」で取り込む（リポジトリは public）
 
 js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で import する（vendor/firebase.js を別 URL で読むと SDK が二重になり動かない）
 
 4. データ構造 (Firestore Path)
 
-/artifacts/{appId}/public/data/state/current: 現在の問題番号、ステータス、採点済みの問題・正解・正解チーム、動画の指示
+/artifacts/{appId}/public/data/state/current: 現在の問題番号、ステータス、採点済みの問題・正解・正解チーム、動画の指示、explainQuizId（説明中の問題）、answerVideoPending（正解動画の再生中）
 
-/artifacts/{appId}/public/data/quizzes: クイズデータ（問題、選択肢、answerMode、正解、当日の正解、配点、解答時間、画像・動画URL）
+/artifacts/{appId}/public/data/quizzes: クイズデータ（問題、選択肢、answerMode、正解、当日の正解、配点、解答時間、画像・動画URL、genre（ジャンル）、explain（ジャンル説明）、answerVideoUrl（正解発表の動画）、note（進行メモ））
 
 /artifacts/{appId}/public/data/teams: name（代表者名。チーム名として表示）、スコア、members（スマホで入力したメンバー名）、readyAt（受付で OK を押した時刻）
 
@@ -41,9 +42,14 @@ js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で i
 
 5. 進行ステータス
 
-waiting → intro（参加方法の説明）→ join（チーム別 QR・受付）→ voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
+waiting → intro（参加方法の説明）→ join（チーム別 QR・受付）→ [explain（ジャンル説明）] → voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
 
 - intro / join は管理画面の「使い方を表示」「参加QRを表示」で切り替える（出題中は押せない）。問題の合間に join に戻して QR を出し直すこともできる
+- explain は quizzes.explain がある問題だけ。「次の問題スタート」1 回目で説明、2 回目（「問題を出す」）で出題。
+  説明中は currentQuizId / currentQuizIndex を動かさない（説明中に intro / join へ戻っても問題が飛ばない）
+- 正解発表の動画（answerVideoUrl）がある問題: 正解発表で先に採点し、answerVideoPending: true の間はメイン画面で動画だけを流す（正解・点数はメイン画面にもスマホにも出さない）。
+  動画の終わりをメイン画面が検知して answerVideoPending: false にすると正解が出る。動画が流れないときは管理画面の「正解を表示（動画を飛ばす）」。
+  時間切れでは自動採点せず締切だけする（司会者が前振りしてから流すため）
 - 受付は代表者が QR を読み込み、メンバー名を入れて OK → teams の members / readyAt が入り、メイン画面のそのチームに「OK」と名前が出る
 - リセットでスコア・回答に加えて受付（members / readyAt）も消える。チーム（代表者名）は残る
 

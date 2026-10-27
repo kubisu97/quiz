@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
     <style>
       /* admin.html 固有 */
       /* 司会者が本番でスマホから操作するので、押しやすさを優先する */
@@ -41,7 +41,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
   </head>
   <body>
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
@@ -72,7 +72,8 @@
           </div>
           <div class="space-y-1.5">
             <div class="text-xs qz-muted">
-              クイズ開始前: 使い方 → 参加QR → 全チームが OK になったら「次の問題スタート」
+              クイズ開始前: 使い方 → 参加QR → 全チームが OK になったら「次の問題スタート」。
+              ジャンル説明のある問題は、1 回目で説明、2 回目で出題になります
             </div>
             <div class="grid grid-cols-2 gap-2">
               <button id="btn-intro" class="qz-btn">
@@ -218,7 +219,10 @@
               <span class="qz-label" style="color:var(--coral)">Quizzes</span>
               <span class="qz-jp-head block text-base mt-0.5">クイズ</span>
             </h2>
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-wrap">
+              <button id="btn-import-toggle" class="qz-btn" style="font-size:11px;padding:6px 10px">
+                シートから貼り付け
+              </button>
               <button id="btn-seed-quizzes" class="qz-btn" style="font-size:11px;padding:6px 10px">
                 サンプル 11 問を投入
               </button>
@@ -227,8 +231,34 @@
               </button>
             </div>
           </div>
+          <div id="import-panel" class="hidden space-y-2 p-4" style="background:var(--paper);border:2px solid var(--forest)">
+            <p class="text-xs leading-relaxed">
+              スプレッドシートの表を<strong>見出しの行ごと</strong>コピーして貼り付けてください。
+              見出しの「ジャンル」「ジャンル説明」「問題文」「選択肢」「正解」「配点」「メモ」を読み取ります
+              （「解答時間」「動画」「正解動画」の列があればそれも）。<br />
+              正解が A〜D 以外（未定・実演結果など）の問題は「当日決める」になります。あとから一覧の「正解」で変えられます。
+            </p>
+            <textarea id="import-text" rows="6" class="qz-input" style="font-size:12px;font-family:monospace"
+              placeholder="問題番号	ジャンル	ジャンル説明（クイズ前）	問題文（お題）	選択肢A / 1	…"></textarea>
+            <div class="flex gap-2 items-center flex-wrap text-sm">
+              <label class="qz-muted">解答時間の列が無いとき:</label>
+              <input id="import-duration" type="number" min="5" max="600" value="30" placeholder="無制限"
+                class="qz-input" style="width:6rem" />
+              <span class="qz-muted">秒（空欄=MCが手動締切）</span>
+              <button id="btn-import-run" type="button" class="qz-btn qz-btn--primary ml-auto" disabled>
+                取り込む
+              </button>
+            </div>
+            <div id="import-preview" class="text-xs space-y-1"></div>
+          </div>
           <div id="quiz-list" class="space-y-2"></div>
           <form id="quiz-form" class="space-y-2 p-4" style="background:var(--pink-soft);border:2px solid var(--pink)">
+            <div id="quiz-form-head" class="items-center justify-between gap-2" style="display:none">
+              <strong id="quiz-form-title" class="text-sm" style="color:var(--coral)"></strong>
+              <button type="button" id="btn-cancel-edit" class="qz-btn" style="font-size:11px;padding:6px 10px">
+                編集をやめる
+              </button>
+            </div>
             <input
               type="text"
               name="question"
@@ -236,6 +266,10 @@
               required
               class="qz-input"
             />
+            <input type="text" name="genre" placeholder="ジャンル (任意。例: 体験型)"
+              class="qz-input">
+            <textarea name="explain" rows="3" class="qz-input"
+              placeholder="ジャンル説明 (任意)。入れると、出題の前にメイン画面へ説明を出します。先頭に【〇〇クイズの説明】と書くと見出しになります"></textarea>
             <div class="flex items-start gap-3 flex-wrap">
               <input type="file" id="quiz-image" accept="image/*"
                 class="qz-file" style="font-size:11px;color:var(--muted)">
@@ -247,6 +281,8 @@
               </div>
             </div>
             <input type="text" name="videoUrl" placeholder="動画URL (任意。MP4 推奨。例: media/meikko.mp4 や https://…/video.mp4)"
+              class="qz-input">
+            <input type="text" name="answerVideoUrl" placeholder="正解発表の動画URL (任意)。入れると、正解発表でこの動画を流し、終わってから正解を出します"
               class="qz-input">
             <input type="text" name="note" placeholder="進行メモ (任意、司会者用。参加者には表示されません)"
               class="qz-input">
@@ -314,13 +350,15 @@
               <span class="qz-muted">秒（空欄=MCが手動締切）</span>
               <button
                 type="submit"
+                id="quiz-submit"
                 class="qz-btn qz-btn--primary ml-auto"
               >
                 追加
               </button>
             </div>
             <p class="text-[10px] qz-muted leading-relaxed">
-              「当日決める」… その場の実演で正解が決まる問題用。出題 → 回答締切 → 実演 → 進行コントロールで正解を選んで発表、の流れになります。
+              「当日決める」… その場の実演で正解が決まる問題用。出題 → 回答締切 → 実演 → 進行コントロールで正解を選んで発表、の流れになります。<br />
+              「正解発表の動画」… 正解発表を押すと先に採点し、メイン画面で動画を流します。動画が終わると正解・得点が表示されます（時間切れでは自動採点せず、締切だけします）。
             </p>
           </form>
         </section>
@@ -328,7 +366,7 @@
       </div>
     </main>
 
-    <script src="env.js?v=20261027a"></script>
+    <script src="env.js?v=20261027b"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -350,6 +388,7 @@
         withAppParam,
         teamMembers,
         isLiveQuiz,
+        revealsManually,
         correctIndexOf,
         choiceLetter,
         onSnapshot,
@@ -366,8 +405,9 @@
         writeBatch,
         closeVoting,
         revealAndScore,
+        finishAnswerVideo,
         startAutoTimer,
-      } from "./js/firebase-init.js?v=20261027a";
+      } from "./js/firebase-init.js?v=20261027b";
 
       const authStatus = document.getElementById("auth-status");
       const errorSlot = document.getElementById("error-slot");
@@ -427,6 +467,7 @@
       let quizzes = [];
       let teams = [];
       let busy = false;
+      let editingQuizId = null; // 下のフォームで編集中の問題（null なら新規追加）
 
       function refreshAll() {
         renderStatus();
@@ -516,7 +557,7 @@
             const issues = (m.issues || [])
               .map(
                 (i) =>
-                  `<li>Q${i.index + 1}: ${escapeHtml(i.message)}</li>`
+                  `<li>${escapeHtml(i.label || `Q${i.index + 1}`)}: ${escapeHtml(i.message)}</li>`
               )
               .join("");
             return `
@@ -591,7 +632,7 @@
               0,
               Math.ceil((currentState.durationMs - elapsed) / 1000)
             );
-            const what = isLiveQuiz(quiz) ? "自動で締切" : "自動採点";
+            const what = revealsManually(quiz) ? "自動で締切" : "自動採点";
             timerText =
               remaining > 0
                 ? ` / 残り ${remaining} 秒で${what}`
@@ -616,20 +657,41 @@
           }
         }
 
+        // ジャンル説明中は、これから出す問題（とその進行メモ）を見せる
+        const explainIndex =
+          status === "explain"
+            ? quizzes.findIndex((q) => q.id === currentState.explainQuizId)
+            : -1;
+        const explainQuiz = quizzes[explainIndex];
+        const shownQuiz = explainQuiz || quiz;
+
         el.innerHTML = `
           <div>ステータス: <strong style="color:var(--coral);font-weight:700">${label}</strong>${timerText}</div>
-          <div>現在の問題: ${
-            quiz
-              ? `#${currentState.currentQuizIndex + 1} ${escapeHtml(
-                  quiz.question
-                )}`
-              : "未設定"
-          }</div>
-          ${answerText ? `<div>${answerText}</div>` : ""}
           ${
-            quiz?.note
+            status === "result" && currentState.answerVideoPending
+              ? `<div class="qz-coral font-bold">▶ 正解発表の動画を再生中（終わるとメイン画面に正解が出ます）</div>`
+              : ""
+          }
+          <div>${
+            explainQuiz
+              ? `次の問題（説明中）: #${explainIndex + 1} ${escapeHtml(explainQuiz.question)}`
+              : `現在の問題: ${
+                  quiz
+                    ? `#${currentState.currentQuizIndex + 1} ${escapeHtml(quiz.question)}`
+                    : "未設定"
+                }`
+          }</div>
+          ${
+            explainQuiz
+              ? `<div class="qz-coral font-bold">説明を読み終えたら「問題を出す」を押してください</div>`
+              : answerText
+              ? `<div>${answerText}</div>`
+              : ""
+          }
+          ${
+            shownQuiz?.note
               ? `<div class="text-xs pl-2" style="border-left:3px solid var(--coral)">メモ: ${escapeHtml(
-                  quiz.note
+                  shownQuiz.note
                 )}</div>`
               : ""
           }
@@ -657,13 +719,30 @@
         intro.disabled = busy || inQuestion || status === "intro";
         join.disabled = busy || inQuestion || status === "join";
         start.disabled = busy || inQuestion || !hasNext;
+        // ジャンル説明のある問題は 1 回目で説明、2 回目で出題
+        const next = hasNext ? quizzes[currentState.currentQuizIndex + 1] : null;
+        start.textContent =
+          status === "explain" && next && currentState.explainQuizId === next.id
+            ? "問題を出す"
+            : next?.explain
+            ? "次へ（ジャンル説明）"
+            : "次の問題スタート";
         close.disabled = busy || status !== "voting";
-        // 当日決める問題は「正解を選ぶ」ボタンから発表する
-        reveal.disabled = busy || !inQuestion || !quiz || isLiveQuiz(quiz);
-        reveal.textContent =
-          quiz && isLiveQuiz(quiz) && inQuestion
-            ? "正解発表（下で選択）"
-            : "正解発表・採点";
+        const pendingVideo = status === "result" && !!currentState.answerVideoPending;
+        if (pendingVideo) {
+          // 動画が再生できない・途中で切りたいときの逃げ道
+          reveal.disabled = busy;
+          reveal.textContent = "正解を表示（動画を飛ばす）";
+        } else {
+          // 当日決める問題は「正解を選ぶ」ボタンから発表する
+          reveal.disabled = busy || !inQuestion || !quiz || isLiveQuiz(quiz);
+          reveal.textContent =
+            quiz && isLiveQuiz(quiz) && inQuestion
+              ? "正解発表（下で選択）"
+              : quiz?.answerVideoUrl && inQuestion
+              ? "正解発表（動画）"
+              : "正解発表・採点";
+        }
         // 採点前に最終結果へ飛ぶと、その問題の点が入らないので止める
         final.disabled = busy || inQuestion;
       }
@@ -702,6 +781,9 @@
           `正解は「${choiceLetter(i)}. ${quiz.choices[i]}」で発表します。\n\n` +
             (currentState.status === "voting"
               ? "まだ回答受付中です。回答を締め切ってから採点します。\n\n"
+              : "") +
+            (quiz.answerVideoUrl
+              ? "メイン画面で正解発表の動画が流れ、終わると正解が表示されます。\n\n"
               : "") +
             "よろしいですか？（採点後は取り消せません）"
         );
@@ -800,8 +882,10 @@
           .map((q, i) => {
             const live = isLiveQuiz(q);
             const kind = videoKind(q.videoUrl);
+            const answerKind = videoKind(q.answerVideoUrl);
+            const embedKinds = [kind, answerKind].filter((k) => k && k !== "MP4");
             return `
-          <div class="qz-row p-3">
+          <div class="qz-row p-3" ${q.id === editingQuizId ? 'style="border-color:var(--coral)"' : ""}>
             <div class="flex items-start gap-2">
               <span class="text-xs qz-muted font-mono">#${i + 1}</span>
               ${
@@ -810,6 +894,22 @@
                   : ""
               }
               <div class="flex-1 text-sm">
+                ${
+                  q.genre || q.explain
+                    ? `<div class="flex items-center gap-1.5 flex-wrap mb-1">
+                        ${
+                          q.genre
+                            ? `<span class="text-[10px] px-1.5 py-0.5 font-bold" style="border:1.5px solid var(--forest);color:var(--forest)">${escapeHtml(q.genre)}</span>`
+                            : ""
+                        }
+                        ${
+                          q.explain
+                            ? `<span class="text-[10px] px-1.5 py-0.5 font-bold" style="background:var(--pink);color:var(--forest)">出題前に説明</span>`
+                            : ""
+                        }
+                      </div>`
+                    : ""
+                }
                 <div class="font-medium flex items-center gap-2 flex-wrap">
                   <span>${escapeHtml(q.question)}</span>
                   <label class="text-xs qz-muted flex items-center gap-1">
@@ -859,11 +959,20 @@
                       ? `<span>動画あり（${kind}）</span>`
                       : ""
                   }
+                  ${
+                    q.answerVideoUrl
+                      ? `<span class="qz-coral">正解発表の動画あり（${answerKind}）</span>`
+                      : ""
+                  }
                 </div>
                 ${
-                  q.videoUrl && kind !== "MP4"
+                  embedKinds.length
                     ? `<div class="text-[10px] mt-1 font-bold" style="color:#c0392b">
-                         ※ ${kind} は外部プレイヤーのため、事前読み込み・一時停止の操作ができません。確実に流すなら MP4 に差し替えてください。
+                         ※ ${[...new Set(embedKinds)].join("・")} は外部プレイヤーのため、事前読み込み・一時停止の操作ができません${
+                           answerKind && answerKind !== "MP4"
+                             ? "（正解発表の動画は終わりを検知できないので、「正解を表示」を押してください）"
+                             : ""
+                         }。確実に流すなら MP4 に差し替えてください。
                        </div>`
                     : ""
                 }
@@ -875,8 +984,12 @@
                     : ""
                 }
               </div>
-              <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
-                data-action="delete-quiz" data-id="${q.id}">削除</button>
+              <div class="flex flex-col gap-1.5 shrink-0">
+                <button class="qz-btn" style="font-size:10px;padding:4px 8px"
+                  data-action="edit-quiz" data-id="${q.id}">編集</button>
+                <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
+                  data-action="delete-quiz" data-id="${q.id}">削除</button>
+              </div>
             </div>
           </div>`;
           })
@@ -964,10 +1077,15 @@
       document
         .getElementById("quiz-list")
         .addEventListener("click", (e) => {
+          if (e.target.dataset.action === "edit-quiz") {
+            startEditQuiz(e.target.dataset.id);
+            return;
+          }
           if (
             e.target.dataset.action === "delete-quiz" &&
             confirm("この問題を削除しますか？")
           ) {
+            if (e.target.dataset.id === editingQuizId) stopEditQuiz();
             guarded(() => deleteDoc(refs.quiz(e.target.dataset.id)));
           }
         });
@@ -1067,6 +1185,8 @@
         revealedCorrectIndex: null,
         scoredTeamIds: null,
         closedAt: null,
+        explainQuizId: null,
+        answerVideoPending: false,
       };
 
       document
@@ -1297,6 +1417,204 @@
           guarded(() => batch.commit());
         });
 
+      // ---- シートから貼り付けて取り込む ----
+      // Excel / Google スプレッドシートからコピーした表（タブ区切り）を読む。
+      // セル内に改行・タブ・" があると "..." で囲まれて来るので、その中は区切りとして扱わない。
+      function parseTsv(text) {
+        const s = String(text ?? "").replace(/\r\n?/g, "\n");
+        const rows = [];
+        let row = [];
+        let cell = "";
+        let quoted = false;
+        for (let i = 0; i < s.length; i++) {
+          const ch = s[i];
+          if (quoted) {
+            if (ch !== '"') cell += ch;
+            else if (s[i + 1] === '"') {
+              cell += '"';
+              i++;
+            } else quoted = false;
+          } else if (ch === '"' && cell === "") {
+            quoted = true;
+          } else if (ch === "\t") {
+            row.push(cell);
+            cell = "";
+          } else if (ch === "\n") {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = "";
+          } else {
+            cell += ch;
+          }
+        }
+        row.push(cell);
+        rows.push(row);
+        return rows.filter((r) => r.some((c) => c.trim()));
+      }
+
+      // 見出しの文字から列を決める。見出しが無いときは、当日のクイズシートと同じ並びとみなす。
+      const SHEET_DEFAULT_COLUMNS = {
+        no: 0,
+        genre: 1,
+        explain: 2,
+        question: 3,
+        choices: [4, 5, 6, 7],
+        correct: 8,
+        points: 9,
+        note: 10,
+        duration: -1,
+        video: -1,
+        answerVideo: -1,
+      };
+      function sheetColumns(header) {
+        const h = header.map((x) => String(x).replace(/\s/g, ""));
+        const find = (test) => h.findIndex(test);
+        const answerVideo = find((x) => x.includes("動画") && x.includes("正解"));
+        const explain = find((x) => x.includes("説明"));
+        return {
+          no: find((x) => x.includes("番号") || x === "No" || x === "No."),
+          genre: h.findIndex((x, i) => x.includes("ジャンル") && i !== explain),
+          explain,
+          question: find((x) => x.includes("問題文") || x.includes("お題")),
+          choices: h.map((x, i) => (x.includes("選択肢") ? i : -1)).filter((i) => i >= 0),
+          correct: find((x) => x.startsWith("正解") && !x.includes("動画")),
+          points: find((x) => x.includes("配点") || x.includes("点数")),
+          note: find((x) => x.includes("メモ")),
+          duration: find((x) => x.includes("解答時間") || x.includes("制限時間")),
+          video: h.findIndex((x, i) => x.includes("動画") && i !== answerVideo && i !== explain),
+          answerVideo,
+        };
+      }
+
+      function readSheet(text, defaultDuration) {
+        const rows = parseTsv(text);
+        const headerAt = rows.findIndex((r) => r.some((c) => /問題文|お題/.test(c)));
+        const cols = headerAt >= 0 ? sheetColumns(rows[headerAt]) : SHEET_DEFAULT_COLUMNS;
+        const body = headerAt >= 0 ? rows.slice(headerAt + 1) : rows;
+        const quizzesIn = [];
+        body.forEach((row) => {
+          const cell = (i) => (i >= 0 && i < row.length ? String(row[i] ?? "").trim() : "");
+          const question = cell(cols.question);
+          if (!question) return;
+          const choices = cols.choices.slice(0, 4).map(cell);
+          while (choices.length < 4) choices.push("");
+          // 正解が A〜D（1〜4）以外（未定・実演結果など）は「当日決める」
+          const sheetCorrect = cell(cols.correct);
+          const m = sheetCorrect.normalize("NFKC").toUpperCase().match(/^([A-D]|[1-4])$/);
+          const correctIndex = m
+            ? "ABCD".includes(m[1])
+              ? "ABCD".indexOf(m[1])
+              : Number(m[1]) - 1
+            : null;
+          const points = parseInt(cell(cols.points).normalize("NFKC"), 10);
+          quizzesIn.push({
+            no: cell(cols.no),
+            sheetCorrect,
+            data: {
+              question,
+              genre: cell(cols.genre) || null,
+              explain: cell(cols.explain) || null,
+              choices,
+              answerMode: correctIndex === null ? "live" : "preset",
+              correctIndex,
+              liveCorrectIndex: null,
+              points: Number.isFinite(points) && points > 0 ? Math.min(1000, points) : 10,
+              durationSec:
+                cols.duration >= 0
+                  ? parseDurationInput(cell(cols.duration).normalize("NFKC"))
+                  : defaultDuration,
+              imageUrl: null,
+              videoUrl: cell(cols.video) || null,
+              answerVideoUrl: cell(cols.answerVideo) || null,
+              note: cell(cols.note) || null,
+            },
+          });
+        });
+        return quizzesIn;
+      }
+
+      let importRows = [];
+      function renderImportPreview() {
+        const text = document.getElementById("import-text").value;
+        const duration = parseDurationInput(document.getElementById("import-duration").value);
+        importRows = text.trim() ? readSheet(text, duration) : [];
+        const box = document.getElementById("import-preview");
+        document.getElementById("btn-import-run").disabled = importRows.length === 0;
+        if (!text.trim()) {
+          box.innerHTML = "";
+          return;
+        }
+        if (importRows.length === 0) {
+          box.innerHTML = `<p class="font-bold" style="color:#c0392b">問題を読み取れませんでした。見出しの行（「問題文」を含む行）ごとコピーしてください。</p>`;
+          return;
+        }
+        const liveCount = importRows.filter((r) => r.data.answerMode === "live").length;
+        const explainCount = importRows.filter((r) => r.data.explain).length;
+        box.innerHTML =
+          `<p class="font-bold">${importRows.length} 問を読み取りました（当日決める ${liveCount} 問・出題前に説明 ${explainCount} 問）</p>` +
+          importRows
+            .map(({ no, sheetCorrect, data: q }) => {
+              const blank = q.choices.filter((c) => !c).length;
+              return `
+              <div class="qz-row p-2">
+                <div class="flex flex-wrap gap-x-2">
+                  <span class="qz-muted font-mono">${escapeHtml(no || "-")}</span>
+                  ${q.genre ? `<strong>[${escapeHtml(q.genre)}]</strong>` : ""}
+                  <span>${escapeHtml(q.question)}</span>
+                </div>
+                <div class="qz-muted mt-0.5">
+                  ${q.choices.map((c, i) => `${choiceLetter(i)}. ${escapeHtml(c)}`).join(" / ")}
+                </div>
+                <div class="mt-0.5">
+                  ${
+                    q.answerMode === "live"
+                      ? `<span class="qz-coral font-bold">当日決める</span>（シート: ${escapeHtml(sheetCorrect || "空欄")}）`
+                      : `正解 <strong>${choiceLetter(q.correctIndex)}</strong>`
+                  }
+                  ・${q.points} 点・${q.durationSec ? `${q.durationSec} 秒` : "手動締切"}
+                  ${q.explain ? `・<span class="qz-coral">出題前に説明</span>` : ""}
+                  ${q.videoUrl ? "・動画あり" : ""}
+                  ${q.answerVideoUrl ? "・正解発表の動画あり" : ""}
+                  ${blank ? `・<span class="font-bold" style="color:#c0392b">選択肢が ${blank} 個空です</span>` : ""}
+                </div>
+              </div>`;
+            })
+            .join("");
+      }
+
+      document.getElementById("btn-import-toggle").addEventListener("click", () => {
+        document.getElementById("import-panel").classList.toggle("hidden");
+      });
+      document.getElementById("import-text").addEventListener("input", renderImportPreview);
+      document.getElementById("import-duration").addEventListener("input", renderImportPreview);
+      document.getElementById("btn-import-run").addEventListener("click", () => {
+        renderImportPreview();
+        if (importRows.length === 0) return;
+        if (
+          !confirm(
+            `${importRows.length} 問を取り込みます。` +
+              (quizzes.length
+                ? `\n\n既存の ${quizzes.length} 問はそのまま残り、後ろに追加されます（入れ替えるときは先に「全問題削除」）。`
+                : "")
+          )
+        )
+          return;
+        const base = quizzes.length
+          ? Math.max(...quizzes.map((q) => q.order || 0)) + 1
+          : 0;
+        const batch = writeBatch(db);
+        importRows.forEach((r, i) => {
+          batch.set(doc(refs.quizzes()), { ...r.data, order: base + i });
+        });
+        guarded(async () => {
+          await batch.commit();
+          document.getElementById("import-text").value = "";
+          renderImportPreview();
+          document.getElementById("import-panel").classList.add("hidden");
+        });
+      });
+
       let currentImageDataUrl = null;
 
       async function fileToResizedDataUrl(file, maxSize = 800, quality = 0.8) {
@@ -1349,15 +1667,7 @@
               clearQuizImage();
               return;
             }
-            currentImageDataUrl = dataUrl;
-            const img = document.getElementById("quiz-image-preview-img");
-            img.src = dataUrl;
-            document
-              .getElementById("quiz-image-preview")
-              .classList.remove("hidden");
-            document.getElementById(
-              "quiz-image-size"
-            ).textContent = `${Math.round(dataUrl.length / 1024)} KB`;
+            showQuizImage(dataUrl);
           } catch (err) {
             console.error(err);
             alert("画像の処理に失敗しました: " + err.message);
@@ -1368,32 +1678,102 @@
         .getElementById("btn-clear-image")
         .addEventListener("click", clearQuizImage);
 
+      function showQuizImage(dataUrl) {
+        currentImageDataUrl = dataUrl;
+        document.getElementById("quiz-image-preview-img").src = dataUrl;
+        document.getElementById("quiz-image-preview").classList.remove("hidden");
+        document.getElementById("quiz-image-size").textContent = `${Math.round(
+          dataUrl.length / 1024
+        )} KB`;
+      }
+
+      // 一覧の「編集」: 下のフォームに中身を入れて「更新」モードにする
+      function startEditQuiz(id) {
+        const q = quizzes.find((x) => x.id === id);
+        if (!q) return;
+        const form = document.getElementById("quiz-form");
+        form.reset();
+        clearQuizImage();
+        editingQuizId = id;
+        form.question.value = q.question || "";
+        form.genre.value = q.genre || "";
+        form.explain.value = q.explain || "";
+        form.videoUrl.value = q.videoUrl || "";
+        form.answerVideoUrl.value = q.answerVideoUrl || "";
+        form.note.value = q.note || "";
+        [0, 1, 2, 3].forEach((i) => (form[`choice${i}`].value = q.choices?.[i] ?? ""));
+        form.correctIndex.value = isLiveQuiz(q) ? "live" : String(q.correctIndex ?? 0);
+        form.points.value = q.points || 10;
+        form.durationSec.value = q.durationSec || "";
+        if (q.imageUrl) showQuizImage(q.imageUrl);
+        const index = quizzes.indexOf(q);
+        document.getElementById("quiz-form-head").style.display = "flex";
+        document.getElementById("quiz-form-title").textContent = `#${index + 1} を編集中`;
+        document.getElementById("quiz-submit").textContent = "更新";
+        renderQuizzes();
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function stopEditQuiz() {
+        editingQuizId = null;
+        const form = document.getElementById("quiz-form");
+        form.reset();
+        clearQuizImage();
+        document.getElementById("quiz-form-head").style.display = "none";
+        document.getElementById("quiz-submit").textContent = "追加";
+        renderQuizzes();
+      }
+
+      document.getElementById("btn-cancel-edit").addEventListener("click", stopEditQuiz);
+
       document
         .getElementById("quiz-form")
         .addEventListener("submit", (e) => {
           e.preventDefault();
           const form = e.target;
           const fd = new FormData(form);
+          const correctRaw = fd.get("correctIndex");
+          const live = correctRaw === "live";
+          const fields = {
+            question: fd.get("question").trim(),
+            genre: fd.get("genre").trim() || null,
+            explain: fd.get("explain").trim() || null,
+            choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
+            answerMode: live ? "live" : "preset",
+            correctIndex: live ? null : parseInt(correctRaw, 10),
+            points: parseInt(fd.get("points"), 10) || 10,
+            durationSec: parseDurationInput(fd.get("durationSec")),
+            imageUrl: currentImageDataUrl || null,
+            videoUrl: fd.get("videoUrl").trim() || null,
+            answerVideoUrl: fd.get("answerVideoUrl").trim() || null,
+            note: fd.get("note").trim() || null,
+          };
+          if (editingQuizId) {
+            const id = editingQuizId;
+            if (!quizzes.some((q) => q.id === id)) {
+              alert("編集中の問題が削除されています");
+              stopEditQuiz();
+              return;
+            }
+            const inQuestion =
+              currentState?.currentQuizId === id &&
+              (currentState.status === "voting" || currentState.status === "closed");
+            if (inQuestion) {
+              alert("出題中の問題は編集できません。採点後に編集してください。");
+              return;
+            }
+            guarded(async () => {
+              await updateDoc(refs.quiz(id), fields);
+              stopEditQuiz();
+            });
+            return;
+          }
           const order =
             quizzes.length > 0
               ? Math.max(...quizzes.map((q) => q.order || 0)) + 1
               : 0;
-          const correctRaw = fd.get("correctIndex");
-          const live = correctRaw === "live";
           guarded(async () => {
-            await addDoc(refs.quizzes(), {
-              question: fd.get("question").trim(),
-              choices: [0, 1, 2, 3].map((i) => fd.get(`choice${i}`).trim()),
-              answerMode: live ? "live" : "preset",
-              correctIndex: live ? null : parseInt(correctRaw, 10),
-              liveCorrectIndex: null,
-              points: parseInt(fd.get("points"), 10) || 10,
-              durationSec: parseDurationInput(fd.get("durationSec")),
-              imageUrl: currentImageDataUrl || null,
-              videoUrl: fd.get("videoUrl").trim() || null,
-              note: fd.get("note").trim() || null,
-              order,
-            });
+            await addDoc(refs.quizzes(), { ...fields, liveCorrectIndex: null, order });
             form.reset();
             clearQuizImage();
           });
@@ -1433,6 +1813,20 @@
             return;
           }
           const quiz = quizzes[nextIndex];
+          // ジャンル説明のある問題は、先に説明画面を出す（司会者が読み終えたらもう一度押して出題）。
+          // 出題前なので currentQuizId / currentQuizIndex は動かさない。
+          const explaining =
+            currentState?.status === "explain" && currentState.explainQuizId === quiz.id;
+          if (quiz.explain && !explaining) {
+            runOp(() =>
+              updateDoc(stateRef, {
+                status: "explain",
+                explainQuizId: quiz.id,
+                answerVideoPending: false,
+              })
+            );
+            return;
+          }
           const durationSec = parseDurationInput(quiz.durationSec);
           runOp(async () => {
             const now = Date.now();
@@ -1446,6 +1840,8 @@
               closedAt: null,
               revealedCorrectIndex: null,
               scoredTeamIds: null,
+              explainQuizId: null,
+              answerVideoPending: false,
               videoPlaying: true,
               videoSeekTo: null,
               videoCmdAt: now,
@@ -1462,7 +1858,13 @@
 
       document.getElementById("btn-reveal").addEventListener("click", () => {
         const quiz = currentQuiz();
-        if (!quiz || isLiveQuiz(quiz)) return;
+        if (!quiz) return;
+        if (currentState?.status === "result" && currentState.answerVideoPending) {
+          if (!confirm("動画の途中でも、メイン画面に正解を表示しますか？")) return;
+          runOp(() => finishAnswerVideo(quiz.id));
+          return;
+        }
+        if (isLiveQuiz(quiz)) return;
         runOp(() => revealAndScore(quiz, quiz.correctIndex));
       });
 
@@ -1516,8 +1918,9 @@
         const quiz = currentQuiz();
         const status = currentState.status;
         const show =
-          !!quiz?.videoUrl &&
-          (status === "voting" || status === "closed" || status === "result");
+          (!!quiz?.videoUrl &&
+            (status === "voting" || status === "closed" || status === "result")) ||
+          (!!quiz?.answerVideoUrl && status === "result" && !!currentState.answerVideoPending);
         box.classList.toggle("hidden", !show);
         if (!show) return;
         const label = document.getElementById("video-state");

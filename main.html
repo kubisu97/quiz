@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
     <style>
       /* main.html 固有 */
       body {
@@ -146,6 +146,26 @@
         color: var(--ink);
       }
 
+      /* ジャンル説明: 文節で折り返し、行の長さをそろえる（対応していないブラウザでは通常の折り返し） */
+      .mq-explain__title {
+        font-size: clamp(2.25rem, 4.6vw, 4.5rem);
+        line-height: 1.25;
+      }
+      .mq-explain__body {
+        font-weight: 700;
+        font-size: clamp(1.4rem, 2.7vw, 2.75rem);
+        line-height: 1.7;
+        color: var(--ink);
+      }
+      .mq-explain__body p {
+        margin: 0 0 0.6em;
+      }
+      .mq-explain__title,
+      .mq-explain__body p {
+        word-break: auto-phrase;
+        text-wrap: balance;
+      }
+
       /* 動画スロット: 中の <video> を枠いっぱいに */
       body[data-status="voting"] #media-status,
       body[data-status="closed"] #media-status,
@@ -160,7 +180,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
   </head>
   <body>
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
@@ -198,8 +218,8 @@
     </button>
     <div id="media-status" class="fixed bottom-2 right-3 z-40 text-[11px] qz-onDark-muted pointer-events-none"></div>
 
-    <script src="env.js?v=20261027a"></script>
-    <script src="vendor/qrcode.min.js?v=20261027a"></script>
+    <script src="env.js?v=20261027b"></script>
+    <script src="vendor/qrcode.min.js?v=20261027b"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -217,13 +237,15 @@
         isLiveQuiz,
         correctIndexOf,
         choiceLetter,
+        explainParts,
         onSnapshot,
         setDoc,
         query,
         orderBy,
         where,
         startAutoTimer,
-      } from "./js/firebase-init.js?v=20261027a";
+        finishAnswerVideo,
+      } from "./js/firebase-init.js?v=20261027b";
 
       const root = document.getElementById("root");
       const overlay = document.getElementById("start-overlay");
@@ -616,12 +638,21 @@
         updateMediaStatus();
       }
 
+      // 問題の動画と正解発表の動画。index は問題番号、label は表示用。
+      function quizVideos() {
+        const list = [];
+        quizzes.forEach((q, index) => {
+          if (q.videoUrl) list.push({ index, url: q.videoUrl, label: `Q${index + 1}` });
+          if (q.answerVideoUrl)
+            list.push({ index, url: q.answerVideoUrl, label: `Q${index + 1} 正解動画` });
+        });
+        return list;
+      }
+
       function syncPreloads() {
-        const wanted = new Set();
-        quizzes.forEach((q) => {
-          if (!q.videoUrl || embedUrlOf(q.videoUrl)) return;
-          const abs = directVideoUrl(q.videoUrl);
-          wanted.add(abs);
+        quizVideos().forEach(({ url }) => {
+          if (embedUrlOf(url)) return;
+          const abs = directVideoUrl(url);
           if (!media.has(abs)) {
             media.set(abs, { state: "queued", progress: 0 });
             preloadQueue = preloadQueue.then(() => preloadOne(abs));
@@ -648,25 +679,25 @@
 
       function mediaSummary() {
         const items = [];
-        quizzes.forEach((q, index) => {
-          if (!q.videoUrl) return;
-          const embed = embedUrlOf(q.videoUrl);
+        quizVideos().forEach(({ index, url, label }) => {
+          const embed = embedUrlOf(url);
           if (embed) {
             items.push({
               index,
+              label,
               state: "embed",
               message: "YouTube/Drive/Vimeo の埋め込みは事前読み込みできません（当日の回線で再生）",
             });
             return;
           }
-          const e = media.get(directVideoUrl(q.videoUrl)) || { state: "queued" };
-          items.push({ index, state: e.state, progress: e.progress, message: e.message });
+          const e = media.get(directVideoUrl(url)) || { state: "queued" };
+          items.push({ index, label, state: e.state, progress: e.progress, message: e.message });
         });
         const ready = items.filter((i) => i.state === "ready").length;
         const loading = items.filter((i) => i.state === "loading" || i.state === "queued").length;
         const issues = items
           .filter((i) => ["stream", "error", "embed"].includes(i.state))
-          .map((i) => ({ index: i.index, state: i.state, message: i.message || "" }));
+          .map((i) => ({ index: i.index, label: i.label, state: i.state, message: i.message || "" }));
         return { total: items.length, ready, loading, issues, items };
       }
 
@@ -712,7 +743,7 @@
               (i) =>
                 `<div class="text-xs mt-1" style="color:${
                   i.state === "loading" || i.state === "queued" ? "var(--ink)" : "#c0392b"
-                }">Q${i.index + 1}: ${
+                }">${escapeHtml(i.label)}: ${
                   i.state === "loading"
                     ? `読み込み中 ${i.progress || 0}%`
                     : i.state === "queued"
@@ -791,9 +822,9 @@
         return e?.state === "ready" && e.blobUrl ? e.blobUrl : abs;
       }
 
-      function mediaSlotHtml(quiz, className) {
-        if (!quiz?.videoUrl) return "";
-        const embed = embedUrlOf(quiz.videoUrl);
+      function mediaSlotHtml(url, className) {
+        if (!url) return "";
+        const embed = embedUrlOf(url);
         if (embed) {
           return `<iframe src="${escapeHtml(embed)}" class="${className}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         }
@@ -801,23 +832,46 @@
       }
 
       // 描画後に呼ぶ。スロットがあれば動画を差し込み、無ければ止める。
-      function mountVideo(quiz) {
+      // url を省略すると問題の動画。正解発表の動画は url に answerVideoUrl を渡す。
+      let mountedVideoUrl = null;
+      function mountVideo(quiz, url = quiz?.videoUrl) {
         const slot = document.getElementById("video-slot");
-        if (!slot || !quiz?.videoUrl) {
+        if (!slot || !url) {
           if (!videoEl.paused) videoEl.pause();
+          mountedVideoUrl = null;
           return;
         }
-        const key = `${quiz.id}|${quiz.videoUrl}|${state?.votingStartedAt ?? ""}`;
+        const key = `${quiz.id}|${url}|${state?.votingStartedAt ?? ""}`;
         if (videoKey !== key) {
           videoKey = key;
-          videoEl.src = resolveVideoSrc(quiz.videoUrl);
+          videoEl.src = resolveVideoSrc(url);
           // 新しい問題の動画は今の指示（再生/停止）から始める。過去の「頭から再生」は使わない。
           lastVideoCmdAt = state?.videoCmdAt ?? null;
         }
+        mountedVideoUrl = url;
         videoEl.className = "w-full h-full bg-black";
         slot.appendChild(videoEl);
         applyVideoState(true);
       }
+
+      // 正解発表の動画が最後まで流れたら正解を出す（複数のメイン画面が同時に送っても 1 回だけ反映される）。
+      // 通信エラーなら数回やり直す。それでも駄目なら管理画面の「正解を表示」で出せる。
+      videoEl.addEventListener("ended", () => {
+        const quiz = quizzes.find((q) => q.id === state?.currentQuizId);
+        if (
+          state?.status !== "result" ||
+          !state.answerVideoPending ||
+          !quiz?.answerVideoUrl ||
+          mountedVideoUrl !== quiz.answerVideoUrl
+        )
+          return;
+        const tryFinish = (retries) =>
+          finishAnswerVideo(quiz.id).catch((err) => {
+            console.warn("finishAnswerVideo", err);
+            if (retries > 0) setTimeout(() => tryFinish(retries - 1), 3000);
+          });
+        tryFinish(3);
+      });
 
       // admin からの指示を <video> に反映する。
       // 同じ指示が繰り返し届いても副作用が出ないよう videoCmdAt で新旧を判定する。
@@ -873,7 +927,9 @@
           const needH = Math.max(inner.scrollHeight, Math.ceil(rect.height));
           const needW = Math.max(inner.scrollWidth, Math.ceil(rect.width));
           if (!availH || !needH) return;
-          const scale = Math.min(1, availH / needH, availW / (needW || 1));
+          // 幅・高さの小数点以下の端数（1px 以内）は縮小しない（上寄せになってしまうため）
+          const fits = needH <= availH + 1 && needW <= availW + 1;
+          const scale = fits ? 1 : Math.min(1, availH / needH, availW / (needW || 1));
           const scaled = scale < 0.999;
           box.classList.toggle("is-scaled", scaled);
           if (scaled) {
@@ -973,6 +1029,7 @@
         resultRenderSig = null;
         if (state.status === "intro") return renderIntro();
         if (state.status === "join") return renderJoin();
+        if (state.status === "explain") return renderExplain();
         lobbyRenderSig = null;
         if (state.status === "final_ranking") return renderFinal();
         return renderWaiting();
@@ -1184,6 +1241,45 @@
         if (count) count.textContent = `受付完了 ${ready} / ${teams.length} チーム`;
       }
 
+      // ジャンル説明。説明のある問題の前に、司会者が読み上げている間に映す（管理画面の「問題を出す」で出題）。
+      function renderExplain() {
+        typedQuizId = null;
+        const index = quizzes.findIndex((q) => q.id === state.explainQuizId);
+        const quiz = quizzes[index];
+        const sig = JSON.stringify(["explain", quiz?.id, quiz?.genre, quiz?.explain, index, quizzes.length]);
+        if (lobbyRenderSig === sig && document.getElementById("mq-explain")) return;
+        lobbyRenderSig = sig;
+        if (!quiz) {
+          root.innerHTML = `<div id="mq-explain" class="flex-1 flex items-center justify-center"><p class="qz-onDark-muted">次のクイズを準備中...</p></div>`;
+          mountVideo(null);
+          return;
+        }
+        const { title, body } = explainParts(quiz);
+        // 1 文ずつ段落にする（長い説明を読み上げに合わせて目で追えるように）
+        const sentences = (body.match(/[^。！？!?]+[。！？!?」』）)]*/g) || [])
+          .map((s) => s.trim())
+          .filter(Boolean);
+        root.innerHTML = `
+          <header id="mq-explain" class="text-center shrink-0">
+            <p class="qz-display qz-display--pink" style="font-size:clamp(2.25rem,4.5vw,3.75rem)">Next stage</p>
+            <p class="qz-label qz-onDark-muted mt-2">Q${index + 1} / ${quizzes.length}</p>
+          </header>
+          <div class="mq-fit mt-6">
+            <div class="mq-fit-inner" style="max-width:68rem;margin:0 auto">
+              <section class="qz-card mq-explain text-center" style="padding:2.25rem 3rem">
+                <h1 class="qz-jp-head mq-explain__title">${escapeHtml(title)}</h1>
+                <hr class="qz-rule qz-rule--pink" style="margin:1.5rem auto;max-width:12rem;height:4px" />
+                <div class="mq-explain__body">
+                  ${sentences.map((s) => `<p>${escapeHtml(s)}</p>`).join("")}
+                </div>
+              </section>
+            </div>
+          </div>
+        `;
+        mountVideo(null);
+        scheduleFit();
+      }
+
       // 正解チーム。採点済みなら採点時に点を入れたチームをそのまま出す（表示と点数を必ず一致させる）。
       function correctTeamsOf(quiz, correct, teamById, answerByTeam) {
         if (state.scoredForQuizId === quiz.id && Array.isArray(state.scoredTeamIds)) {
@@ -1316,6 +1412,13 @@
                   style="background:var(--coral);color:#fff">${
                     quiz.points || 10
                   } 点問題</span>
+                ${
+                  quiz.genre
+                    ? `<span class="text-xs font-bold px-2.5 py-1" style="border:1.5px solid var(--pink);color:var(--pink)">${escapeHtml(
+                        quiz.genre
+                      )}</span>`
+                    : ""
+                }
               </div>
               <div class="mq-question px-8 py-5 ${
                 hasMedia ? "text-xl md:text-3xl" : "text-3xl md:text-5xl"
@@ -1359,7 +1462,9 @@
               ? `<div class="shrink-0 mt-3 text-center qz-card py-2 px-4" style="box-shadow:6px 6px 0 0 var(--coral)">
                    <span class="qz-display qz-display--coral" style="font-size:1.6rem">Time's up!</span>
                    <span class="qz-jp-head text-lg ml-3">${
-                     live
+                     quiz.answerVideoUrl
+                       ? "回答締切！ 正解はこのあとの動画で発表します"
+                       : live
                        ? "回答締切！ このあとの結果で正解が決まります"
                        : "回答締切！ 正解発表をお待ちください"
                    }</span>
@@ -1372,7 +1477,7 @@
                 hasMedia
                   ? `<div class="w-full flex flex-col items-center gap-3">
                       ${mediaSlotHtml(
-                        quiz,
+                        quiz.videoUrl,
                         "mq-media-video w-full aspect-video bg-black"
                       )}
                       ${
@@ -1497,21 +1602,58 @@
         const answerByTeam = new Map(answers.map((a) => [a.teamId, a]));
         const correctTeams = correctTeamsOf(quiz, correct, teamById, answerByTeam);
         const hasMedia = !!(quiz.videoUrl || quiz.imageUrl);
+        // 正解発表の動画を流している間は、正解・得点を伏せて動画だけを見せる
+        const answerVideo = !!(state.answerVideoPending && quiz.answerVideoUrl);
 
         // 中身が変わらないときは描き直さない（埋め込み動画の再読み込みを防ぐ）
-        const sig = JSON.stringify([
-          quiz.id,
-          quiz.question,
-          quiz.choices,
-          quiz.videoUrl,
-          quiz.imageUrl ? quiz.imageUrl.length : 0,
-          correct,
-          state.scoredTeamIds,
-          teams.map((t) => [t.id, t.name, t.score]),
-          answers.map((a) => [a.teamId, a.choice]),
-        ]);
+        const sig = JSON.stringify(
+          answerVideo
+            ? ["answer-video", quiz.id, quiz.question, quiz.choices, quiz.answerVideoUrl]
+            : [
+                quiz.id,
+                quiz.question,
+                quiz.choices,
+                quiz.videoUrl,
+                quiz.imageUrl ? quiz.imageUrl.length : 0,
+                correct,
+                state.scoredTeamIds,
+                teams.map((t) => [t.id, t.name, t.score]),
+                answers.map((a) => [a.teamId, a.choice]),
+              ]
+        );
         if (sig === resultRenderSig && document.getElementById("mq-result")) return;
         resultRenderSig = sig;
+
+        if (answerVideo) {
+          // 動画の中で正解を言うので、選択肢は色を付けずに並べておく
+          root.innerHTML = `
+            <header id="mq-result" class="shrink-0 text-center">
+              <p class="qz-display qz-display--pink" style="font-size:clamp(2rem,4vw,3.25rem)">Answer</p>
+              <h1 class="text-lg md:text-xl font-black truncate qz-cream mt-0.5">
+                ${escapeHtml(quiz.question)}
+              </h1>
+            </header>
+            <div class="mq-fit mt-3">
+              <div class="mq-fit-inner flex flex-col items-center gap-4">
+                ${mediaSlotHtml(quiz.answerVideoUrl, "mq-media-video w-full aspect-video bg-black")}
+                <div class="w-full grid grid-cols-2 gap-4">
+                  ${quiz.choices
+                    .map(
+                      (c, i) => `
+                    <div class="qz-choice qz-choice--calm">
+                      <span class="qz-choice__key" style="font-size:1.5rem">${choiceLetter(i)}</span>
+                      <span class="qz-choice__body text-base md:text-xl">${escapeHtml(c)}</span>
+                    </div>`
+                    )
+                    .join("")}
+                </div>
+              </div>
+            </div>
+          `;
+          mountVideo(quiz, quiz.answerVideoUrl);
+          scheduleFit();
+          return;
+        }
 
         // 出題中と同じ構成: メディアは1カラムで大きく、その下を2カラム
         root.innerHTML = `
@@ -1527,7 +1669,7 @@
                 hasMedia
                   ? `<div class="w-full flex flex-col items-center gap-3">
                       ${mediaSlotHtml(
-                        quiz,
+                        quiz.videoUrl,
                         "mq-media-video w-full aspect-video bg-black"
                       )}
                       ${

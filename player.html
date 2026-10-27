@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -42,7 +42,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -50,7 +50,7 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js?v=20261027a"></script>
+    <script src="env.js?v=20261027b"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -75,7 +75,7 @@
         getDoc,
         query,
         orderBy,
-      } from "./js/firebase-init.js?v=20261027a";
+      } from "./js/firebase-init.js?v=20261027b";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
@@ -513,9 +513,32 @@
           return;
         }
         votingRenderKey = null;
-        if (status === "result") renderResult();
+        if (status === "result" && store.state.answerVideoPending) renderAnswerVideoWait();
+        else if (status === "result") renderResult();
         else if (status === "final_ranking") renderFinal();
         else renderWaiting();
+      }
+
+      // 正解発表の動画をメイン画面で流している間は、正解も点数も出さない（動画のネタバレを防ぐ）
+      function renderAnswerVideoWait() {
+        const answered = store.answer;
+        const quiz = store.quiz;
+        root.innerHTML =
+          headerHtml() +
+          `<section class="qz-card p-6 text-center space-y-4">
+            <p class="qz-display" style="font-size:2.25rem">Answer</p>
+            <h1 class="qz-jp-head text-base">まもなく正解発表</h1>
+            <p class="qz-panel--pink p-3 text-xs font-bold">▶ メイン画面（スクリーン）の動画をご覧ください</p>
+            ${
+              answered
+                ? `<div class="text-xs qz-muted">
+                    あなたの回答: ${choiceLetter(answered.choice)}. ${escapeHtml(
+                      quiz?.choices?.[answered.choice] || ""
+                    )}
+                  </div>`
+                : `<div class="text-xs qz-muted">未回答</div>`
+            }
+          </section>`;
       }
 
       function renderWaiting() {
