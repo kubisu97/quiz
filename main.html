@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
     <style>
       /* main.html 固有 */
       body {
@@ -89,6 +89,63 @@
         color: var(--ink);
       }
 
+      /* 参加方法の説明: 番号付きの手順カード */
+      .mq-step__num {
+        font-family: var(--font-accent);
+        font-weight: 800;
+        font-size: 3.5rem;
+        line-height: 1;
+        color: var(--coral);
+      }
+
+      /* 参加受付: チームごとのカード。OK を押したチームは影をコーラルにして目立たせる */
+      .mq-entry.is-ready {
+        box-shadow: 12px 12px 0 0 var(--coral);
+      }
+      .mq-entry__qr img,
+      .mq-entry__qr canvas {
+        display: block;
+      }
+      .mq-entry__wait {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .mq-ok {
+        display: inline-block;
+        padding: 0.15em 0.7em;
+        background: var(--coral);
+        color: var(--cream);
+        font-family: var(--font-accent);
+        font-weight: 800;
+        font-size: 2.25rem;
+        line-height: 1.1;
+      }
+      .mq-ok-pop {
+        animation: mq-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+      }
+      @keyframes mq-pop {
+        from {
+          transform: scale(0.4);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .mq-members {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2px 12px;
+        margin-top: 0.6rem;
+        font-weight: 700;
+        font-size: 1rem;
+        line-height: 1.5;
+        color: var(--ink);
+      }
+
       /* 動画スロット: 中の <video> を枠いっぱいに */
       body[data-status="voting"] #media-status,
       body[data-status="closed"] #media-status,
@@ -103,7 +160,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
   </head>
   <body>
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
@@ -141,8 +198,8 @@
     </button>
     <div id="media-status" class="fixed bottom-2 right-3 z-40 text-[11px] qz-onDark-muted pointer-events-none"></div>
 
-    <script src="env.js?v=20261023a"></script>
-    <script src="vendor/qrcode.min.js?v=20261023a"></script>
+    <script src="env.js?v=20261027a"></script>
+    <script src="vendor/qrcode.min.js?v=20261027a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -155,7 +212,8 @@
         describeError,
         mountConnectionBanner,
         mountRehearsalBadge,
-        withAppParam,
+        teamJoinUrl,
+        teamMembers,
         isLiveQuiz,
         correctIndexOf,
         choiceLetter,
@@ -165,7 +223,7 @@
         orderBy,
         where,
         startAutoTimer,
-      } from "./js/firebase-init.js?v=20261023a";
+      } from "./js/firebase-init.js?v=20261027a";
 
       const root = document.getElementById("root");
       const overlay = document.getElementById("start-overlay");
@@ -913,15 +971,25 @@
         stopQuestionTyping();
         if (state.status === "result") return renderResult();
         resultRenderSig = null;
+        if (state.status === "intro") return renderIntro();
+        if (state.status === "join") return renderJoin();
+        lobbyRenderSig = null;
         if (state.status === "final_ranking") return renderFinal();
         return renderWaiting();
       }
 
-      function joinUrl() {
-        return withAppParam("player.html");
+      // 説明画面・受付画面は state の更新のたびに描き直すと QR やアニメーションがちらつくので、
+      // 中身が変わったときだけ描き直す
+      let lobbyRenderSig = null;
+
+      function noTeamsHtml() {
+        return `<div class="qz-card p-8 text-center max-w-xl mx-auto">
+                  <p class="qz-display" style="font-size:2rem">No teams yet</p>
+                  <p class="qz-muted text-sm mt-2">まだチームが登録されていません（管理画面で代表者名を登録してください）</p>
+                </div>`;
       }
 
-      // 参加用 QR は全チーム共通の1枚だけ。チームは参加者が自分で作る。
+      // 開始前のタイトル画面。参加用の QR は「参加受付」（join）で出す。
       function renderWaiting() {
         typedQuizId = null;
         const currentIdx = state.currentQuizIndex ?? -1;
@@ -937,68 +1005,183 @@
             </p>
           </header>
           <div class="mq-fit mt-4">
-            <div class="mq-fit-inner flex items-center justify-center gap-10">
-              <section class="shrink-0 text-center">
-                <div class="qz-card p-4 inline-block">
-                  <div id="join-qr"></div>
-                </div>
-                <p class="qz-jp-head qz-display--cream mt-5 text-lg" style="color:var(--cream)">
-                  スマホで読み取って参加
-                </p>
-                <p class="text-xs qz-onDark-muted mt-1.5 leading-relaxed">
-                  チーム名と代表者名を入力してください<br />
-                  同じチーム名なら合流できます
-                </p>
-              </section>
-              <section class="flex-1 max-w-2xl min-w-0 space-y-3">
-                ${
-                  teams.length === 0
-                    ? `<div class="qz-card p-8 text-center">
-                         <p class="qz-display" style="font-size:2rem">No teams yet</p>
-                         <p class="qz-muted text-sm mt-2">まだ参加チームがありません</p>
-                       </div>`
-                    : renderScoreboard()
-                }
-                ${
-                  quiz && !isStart && Number.isInteger(prevCorrect)
-                    ? `<div class="qz-panel p-3">
-                         <div class="qz-label qz-onDark-muted" style="font-size:10px">Previous</div>
-                         <div class="text-sm truncate mt-1">${escapeHtml(
-                           quiz.question
-                         )}</div>
-                         <div class="text-xs mt-1 qz-coral font-bold">
-                           ${choiceLetter(prevCorrect)}.
-                           ${escapeHtml(quiz.choices[prevCorrect])}
-                         </div>
-                       </div>`
-                    : ""
-                }
-              </section>
+            <div class="mq-fit-inner max-w-2xl mx-auto space-y-3">
+              ${
+                isStart
+                  ? `<p class="qz-jp-head text-center" style="color:var(--cream);font-size:clamp(1.25rem,2.4vw,2rem)">まもなく始まります</p>`
+                  : teams.length === 0
+                  ? noTeamsHtml()
+                  : renderScoreboard()
+              }
+              ${
+                quiz && !isStart && Number.isInteger(prevCorrect)
+                  ? `<div class="qz-panel p-3">
+                       <div class="qz-label qz-onDark-muted" style="font-size:10px">Previous</div>
+                       <div class="text-sm truncate mt-1">${escapeHtml(
+                         quiz.question
+                       )}</div>
+                       <div class="text-xs mt-1 qz-coral font-bold">
+                         ${choiceLetter(prevCorrect)}.
+                         ${escapeHtml(quiz.choices[prevCorrect])}
+                       </div>
+                     </div>`
+                  : ""
+              }
             </div>
           </div>
           <div class="shrink-0 text-center text-xs qz-onDark-muted mt-2">
             参加チーム ${teams.length} / 全 ${quizzes.length} 問
           </div>
         `;
-
-        const qrBox = document.getElementById("join-qr");
-        try {
-          new QRCode(qrBox, {
-            text: joinUrl(),
-            width: 220,
-            height: 220,
-            colorDark: "#174c39",
-            colorLight: "#fffaf0",
-            correctLevel: QRCode.CorrectLevel.M,
-          });
-        } catch (err) {
-          console.error(err);
-          qrBox.innerHTML = `<p class="text-sm p-4" style="max-width:220px;word-break:break-all">${escapeHtml(
-            joinUrl()
-          )}</p>`;
-        }
         mountVideo(null);
         scheduleFit();
+      }
+
+      // 参加方法の説明。司会者が読み上げている間に映す（管理画面の「使い方を表示」）。
+      function renderIntro() {
+        typedQuizId = null;
+        if (lobbyRenderSig === "intro" && document.getElementById("mq-intro")) return;
+        lobbyRenderSig = "intro";
+        // 文節単位で折り返す（「名前を入 / れて」のような途中改行を防ぐ）
+        const steps = [
+          ["それぞれ QR コードを", "読み込んで"],
+          ["回答画面に", "チーム全員の", "名前を入れて"],
+          ["OK を押して", "待っていてください"],
+        ].map((phrases) =>
+          phrases.map((p) => `<span style="display:inline-block">${p}</span>`).join("")
+        );
+        root.innerHTML = `
+          <header id="mq-intro" class="text-center shrink-0">
+            <p class="qz-display qz-display--pink" style="font-size:clamp(2.5rem,5vw,4.25rem)">How to join</p>
+            <p class="qz-jp-head mt-2" style="color:var(--cream);font-size:clamp(1.1rem,2vw,1.6rem)">参加のしかた</p>
+          </header>
+          <div class="mq-fit mt-6">
+            <div class="mq-fit-inner max-w-6xl mx-auto">
+              <p class="qz-jp-head text-center leading-relaxed" style="color:var(--cream);font-size:clamp(1.4rem,2.6vw,2.4rem)">
+                これから、それぞれのチームの<br />
+                <span class="qz-coral">代表者さんの名前</span>と<span class="qz-coral">QR コード</span>が出てきます
+              </p>
+              <div class="grid grid-cols-3 gap-8 mt-10">
+                ${steps
+                  .map(
+                    (text, i) => `
+                  <section class="qz-card p-6 text-center">
+                    <div class="mq-step__num">${i + 1}</div>
+                    <p class="qz-jp-head mt-4 leading-snug" style="font-size:clamp(1.1rem,1.9vw,1.75rem)">${text}</p>
+                  </section>`
+                  )
+                  .join("")}
+              </div>
+            </div>
+          </div>
+        `;
+        mountVideo(null);
+        scheduleFit();
+      }
+
+      // 参加受付。チームごとに代表者名と専用 QR を並べ、OK を押したチームから表示を切り替える。
+      // QR の生成は重いので、チームの顔ぶれが変わったときだけ描き直し、受付状況は部分更新する。
+      function renderJoin() {
+        typedQuizId = null;
+        const sig = JSON.stringify(["join", teams.map((t) => [t.id, t.name])]);
+        if (lobbyRenderSig === sig && document.getElementById("mq-join")) {
+          updateJoinStatus(false);
+          return;
+        }
+        lobbyRenderSig = sig;
+        const n = teams.length;
+        const qrSize = n <= 3 ? 280 : n <= 5 ? 220 : n <= 8 ? 190 : 150;
+        const cols = n <= 5 ? Math.max(n, 1) : Math.ceil(n / 2);
+        root.innerHTML = `
+          <header id="mq-join" class="text-center shrink-0">
+            <p class="qz-display qz-display--pink" style="font-size:clamp(2.25rem,4.5vw,3.75rem)">Entry</p>
+            <p class="qz-jp-head mt-2" style="color:var(--cream);font-size:clamp(1rem,1.8vw,1.5rem)">
+              自分のチームの QR コードを読み込み、チーム全員の名前を入れて OK を押してください
+            </p>
+          </header>
+          <div class="mq-fit mt-6">
+            <div class="mq-fit-inner">
+              ${
+                n === 0
+                  ? noTeamsHtml()
+                  : `<div class="grid gap-6" style="grid-template-columns:repeat(${cols}, ${
+                      qrSize + 48
+                    }px);justify-content:center">
+                      ${teams
+                        .map(
+                          (t, i) => `
+                        <section class="mq-entry qz-card p-4 flex flex-col items-center text-center"
+                          data-team="${t.id}" style="border-top:10px solid ${teamColor(i)}">
+                          <div class="qz-label qz-muted" style="font-size:11px">代表</div>
+                          <div class="qz-jp-head truncate w-full" style="font-size:1.6rem">${escapeHtml(
+                            t.name
+                          )}</div>
+                          <div class="mq-entry__qr mt-3" data-qr="${t.id}"></div>
+                          <div class="mt-3 w-full" data-entry-status="${t.id}"></div>
+                        </section>`
+                        )
+                        .join("")}
+                    </div>`
+              }
+            </div>
+          </div>
+          <div id="mq-join-count" class="shrink-0 text-center qz-onDark-muted mt-2" style="font-size:1rem"></div>
+        `;
+
+        teams.forEach((t) => {
+          const box = root.querySelector(`[data-qr="${t.id}"]`);
+          if (!box) return;
+          const url = teamJoinUrl(t.id);
+          try {
+            new QRCode(box, {
+              text: url,
+              width: qrSize,
+              height: qrSize,
+              colorDark: "#174c39",
+              colorLight: "#fffaf0",
+              correctLevel: QRCode.CorrectLevel.M,
+            });
+          } catch (err) {
+            console.error(err);
+            box.innerHTML = `<p class="text-xs p-2" style="max-width:${qrSize}px;word-break:break-all">${escapeHtml(
+              url
+            )}</p>`;
+          }
+        });
+        updateJoinStatus(true);
+        mountVideo(null);
+        scheduleFit();
+      }
+
+      // 受付状況だけを書き換える。OK になった瞬間だけポップさせる（描き直しのたびに動かさない）。
+      function updateJoinStatus(initial) {
+        let ready = 0;
+        teams.forEach((t) => {
+          const isReady = !!t.readyAt;
+          if (isReady) ready++;
+          const card = root.querySelector(`.mq-entry[data-team="${t.id}"]`);
+          const box = root.querySelector(`[data-entry-status="${t.id}"]`);
+          if (!card || !box) return;
+          const members = teamMembers(t);
+          const sig = JSON.stringify([isReady, members]);
+          if (box.dataset.sig === sig) return;
+          const becameReady = isReady && box.dataset.ready !== "1";
+          box.dataset.sig = sig;
+          box.dataset.ready = isReady ? "1" : "0";
+          card.classList.toggle("is-ready", isReady);
+          box.innerHTML = isReady
+            ? `<div class="mq-ok${becameReady && !initial ? " mq-ok-pop" : ""}">✓ OK</div>
+               ${
+                 members.length
+                   ? `<div class="mq-members">${members
+                       .map((m) => `<span>${escapeHtml(m)}</span>`)
+                       .join("")}</div>`
+                   : ""
+               }`
+            : `<div class="mq-entry__wait">待機中…</div>`;
+        });
+        const count = document.getElementById("mq-join-count");
+        if (count) count.textContent = `受付完了 ${ready} / ${teams.length} チーム`;
       }
 
       // 正解チーム。採点済みなら採点時に点を入れたチームをそのまま出す（表示と点数を必ず一致させる）。
@@ -1040,13 +1223,6 @@
                     style="border:2.4px solid ${color};background:var(--pink-soft)">
                     <span class="w-3 h-3" style="background-color:${color}"></span>
                     <span class="qz-jp-head text-lg">${escapeHtml(t.name)}</span>
-                    ${
-                      t.representative
-                        ? `<span class="text-xs qz-muted">${escapeHtml(
-                            t.representative
-                          )}</span>`
-                        : ""
-                    }
                   </div>`;
                 })
                 .join("")}
@@ -1331,7 +1507,7 @@
           quiz.imageUrl ? quiz.imageUrl.length : 0,
           correct,
           state.scoredTeamIds,
-          teams.map((t) => [t.id, t.name, t.score, t.representative]),
+          teams.map((t) => [t.id, t.name, t.score]),
           answers.map((a) => [a.teamId, a.choice]),
         ]);
         if (sig === resultRenderSig && document.getElementById("mq-result")) return;
@@ -1448,6 +1624,7 @@
                 .map((t, rank) => {
                   const color = teamColor(t.origIndex);
                   const isTop = rank === 0;
+                  const members = teamMembers(t);
                   return `
                   <div class="${
                     isTop ? "qz-card" : "qz-panel"
@@ -1465,10 +1642,10 @@
                     isTop ? "1.75rem" : "1.25rem"
                   }">${escapeHtml(t.name)}</div>
                       ${
-                        t.representative
-                          ? `<div class="text-xs ${
+                        members.length
+                          ? `<div class="text-xs truncate ${
                               isTop ? "qz-muted" : "qz-onDark-muted"
-                            }">${escapeHtml(t.representative)}</div>`
+                            }">${escapeHtml(members.join("・"))}</div>`
                           : ""
                       }
                     </div>

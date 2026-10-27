@@ -19,11 +19,11 @@ Realtime: Firestore onSnapshot を利用した状態管理
 
 index.html: エントランス（解答者、メイン、管理への分岐）
 
-player.html: 解答者用（チーム選択 -> 回答ボタン -> 結果待ち）。動画はスマホには出さない（メイン画面で見てもらう）
+player.html: 解答者用（チーム別 QR で開く -> チーム全員の名前を入れて OK -> 回答ボタン -> 結果待ち）。?team= が無いときは登録済みチームの一覧から選ぶ。動画はスマホには出さない（メイン画面で見てもらう）
 
-main.html: プロジェクター用（開始ボタン -> QRコード -> 問題・タイマー -> 締切 -> 正解発表 -> ランキング）
+main.html: プロジェクター用（開始ボタン -> 参加方法の説明 -> チーム別 QR と受付状況 -> 問題・タイマー -> 締切 -> 正解発表 -> ランキング）
 
-admin.html: 管理画面（問題作成、進行コントロール、当日の正解選択、メイン画面の状態確認、リセット）
+admin.html: 管理画面（チーム＝代表者名の登録、問題作成、進行コントロール、当日の正解選択、メイン画面の状態確認、リセット）
 
 js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で import する（vendor/firebase.js を別 URL で読むと SDK が二重になり動かない）
 
@@ -33,7 +33,7 @@ js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で i
 
 /artifacts/{appId}/public/data/quizzes: クイズデータ（問題、選択肢、answerMode、正解、当日の正解、配点、解答時間、画像・動画URL）
 
-/artifacts/{appId}/public/data/teams: チーム名、スコア
+/artifacts/{appId}/public/data/teams: name（代表者名。チーム名として表示）、スコア、members（スマホで入力したメンバー名）、readyAt（受付で OK を押した時刻）
 
 /artifacts/{appId}/public/data/answers: 各チームの回答（ID は {quizId}_{teamId}）
 
@@ -41,7 +41,11 @@ js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で i
 
 5. 進行ステータス
 
-waiting → voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
+waiting → intro（参加方法の説明）→ join（チーム別 QR・受付）→ voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
+
+- intro / join は管理画面の「使い方を表示」「参加QRを表示」で切り替える（出題中は押せない）。問題の合間に join に戻して QR を出し直すこともできる
+- 受付は代表者が QR を読み込み、メンバー名を入れて OK → teams の members / readyAt が入り、メイン画面のそのチームに「OK」と名前が出る
+- リセットでスコア・回答に加えて受付（members / readyAt）も消える。チーム（代表者名）は残る
 
 - 事前に正解を入れた問題（answerMode: "preset"）: 時間切れで自動採点。手動締切の問題は「回答締切」→「正解発表・採点」
 - 当日決める問題（answerMode: "live"）: 時間切れ・「回答締切」で closed になり、司会者が管理画面で正解の選択肢を押すと採点。

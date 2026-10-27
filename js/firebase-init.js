@@ -15,7 +15,7 @@ import {
   where,
   runTransaction,
   increment,
-} from "../vendor/firebase.js?v=20261023a";
+} from "../vendor/firebase.js?v=20261027a";
 
 export {
   doc,
@@ -34,10 +34,10 @@ export {
   runTransaction,
   increment,
   serverTimestamp,
-} from "../vendor/firebase.js?v=20261023a";
+} from "../vendor/firebase.js?v=20261027a";
 
 // 画面の隅に出すバージョン。デプロイが反映されたかの確認に使う。
-export const APP_VERSION = "2026.10.23a";
+export const APP_VERSION = "2026.10.27a";
 
 const env = typeof window !== "undefined" ? window.__ENV__ : null;
 
@@ -118,13 +118,17 @@ export const refs = {
 };
 
 // 進行ステータス
-//   waiting       … 待機（QR・スコア表示）
+//   waiting       … 待機（開始前のタイトル・スコア表示）
+//   intro         … 参加方法の説明（クイズ開始前）
+//   join          … 参加受付（チームごとの QR と受付状況）
 //   voting        … 回答受付中
 //   closed        … 回答締切（採点前。当日決める問題はここで正解を選ぶ）
 //   result        … 正解発表
 //   final_ranking … 最終結果
 export const STATUS_LABELS = {
   waiting: "待機中",
+  intro: "参加方法の説明",
+  join: "参加受付（QR 表示）",
   voting: "回答受付中",
   closed: "回答締切（正解発表前）",
   result: "正解発表",
@@ -250,6 +254,20 @@ export function startAutoTimer({ getState, getQuizzes, graceMs = 0, onError, onO
       inFlight = false;
     }
   }, 500);
+}
+
+// チームの参加用 URL。QR はチームごとに分け、読み取るとそのチームの画面が開く。
+export function teamJoinUrl(teamId) {
+  const url = new URL("player.html", location.href);
+  url.searchParams.set("team", teamId);
+  return withAppParam(url.toString());
+}
+
+// スマホで入力したメンバー名（受付で OK を押すと members と readyAt が入る）
+export function teamMembers(team) {
+  return Array.isArray(team?.members)
+    ? team.members.map((m) => String(m ?? "").trim()).filter(Boolean)
+    : [];
 }
 
 export function choiceLetter(i) {

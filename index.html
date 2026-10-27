@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
     <style>
       /* index.html 固有 */
       /* 入口カードは参照元のハードシャドウを押し込みアニメーションに使う */
@@ -30,7 +30,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
   </head>
   <body>
     <main class="max-w-4xl mx-auto px-6 py-14">
@@ -73,7 +73,7 @@
           <div class="qz-label" style="color: var(--coral)">Player</div>
           <div class="qz-jp-head text-lg mt-2">解答画面</div>
           <p class="text-xs qz-muted mt-2 leading-relaxed">
-            チーム名を入力して参加、<br />スマホから回答
+            メイン画面のチーム別 QR から参加、<br />スマホから回答
           </p>
         </a>
       </nav>
@@ -82,7 +82,7 @@
       <div id="error-slot"></div>
     </main>
 
-    <script src="env.js?v=20261023a" onerror="window.__ENV_LOAD_FAILED__ = true"></script>
+    <script src="env.js?v=20261027a" onerror="window.__ENV_LOAD_FAILED__ = true"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -94,7 +94,7 @@
         describeError,
         mountRehearsalBadge,
         withAppParam,
-      } from "./js/firebase-init.js?v=20261023a";
+      } from "./js/firebase-init.js?v=20261027a";
 
       const statusEl = document.getElementById("status");
       const errorSlot = document.getElementById("error-slot");

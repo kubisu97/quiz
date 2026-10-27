@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
     <style>
       /* admin.html 固有 */
       /* 司会者が本番でスマホから操作するので、押しやすさを優先する */
@@ -41,7 +41,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
   </head>
   <body>
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
@@ -69,6 +69,19 @@
             class="qz-panel p-3 text-sm space-y-1"
           >
             読み込み中...
+          </div>
+          <div class="space-y-1.5">
+            <div class="text-xs qz-muted">
+              クイズ開始前: 使い方 → 参加QR → 全チームが OK になったら「次の問題スタート」
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-intro" class="qz-btn">
+                ① 使い方を表示
+              </button>
+              <button id="btn-join" class="qz-btn">
+                ② 参加QRを表示
+              </button>
+            </div>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             <button
@@ -178,14 +191,15 @@
             </div>
           </div>
           <p class="text-xs qz-muted">
-            参加者はメイン画面の QR を読み取り、<strong class="">チーム名と代表者名を自分で入力</strong>して参加します。ここでの事前登録は任意です（同じチーム名なら合流します）。
+            <strong>代表者名</strong>を登録すると、メイン画面の「参加QR」に代表者名とチーム専用の QR が並びます。
+            代表者が QR を読み込み、チーム全員の名前を入れて OK を押すと受付完了です。
           </p>
           <div id="team-list" class="space-y-2"></div>
           <form id="team-form" class="flex gap-2">
             <input
               type="text"
               name="name"
-              placeholder="新しいチーム名"
+              placeholder="代表者名（例: 山田太郎）"
               required
               class="qz-input flex-1"
             />
@@ -314,7 +328,7 @@
       </div>
     </main>
 
-    <script src="env.js?v=20261023a"></script>
+    <script src="env.js?v=20261027a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -334,6 +348,7 @@
         mountConnectionBanner,
         mountRehearsalBadge,
         withAppParam,
+        teamMembers,
         isLiveQuiz,
         correctIndexOf,
         choiceLetter,
@@ -352,7 +367,7 @@
         closeVoting,
         revealAndScore,
         startAutoTimer,
-      } from "./js/firebase-init.js?v=20261023a";
+      } from "./js/firebase-init.js?v=20261027a";
 
       const authStatus = document.getElementById("auth-status");
       const errorSlot = document.getElementById("error-slot");
@@ -618,7 +633,9 @@
                 )}</div>`
               : ""
           }
-          <div class="qz-muted">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件</div>
+          <div class="qz-muted">登録: クイズ ${quizzes.length} 件 / チーム ${teams.length} 件（受付OK ${
+            teams.filter((t) => t.readyAt).length
+          } / ${teams.length}）</div>
         `;
       }
 
@@ -627,6 +644,8 @@
         const close = document.getElementById("btn-close");
         const reveal = document.getElementById("btn-reveal");
         const final = document.getElementById("btn-final");
+        const intro = document.getElementById("btn-intro");
+        const join = document.getElementById("btn-join");
         if (!currentState) return;
         const status = currentState.status;
         const quiz = currentQuiz();
@@ -634,6 +653,9 @@
         const hasNext =
           quizzes.length > 0 &&
           currentState.currentQuizIndex + 1 < quizzes.length;
+        // 出題中に切り替えると回答・採点が宙に浮くので、問題の合間だけ押せる
+        intro.disabled = busy || inQuestion || status === "intro";
+        join.disabled = busy || inQuestion || status === "join";
         start.disabled = busy || inQuestion || !hasNext;
         close.disabled = busy || status !== "voting";
         // 当日決める問題は「正解を選ぶ」ボタンから発表する
@@ -697,26 +719,38 @@
         list.innerHTML = teams
           .map((t, i) => {
             const color = TEAM_COLORS[i % TEAM_COLORS.length];
+            const members = teamMembers(t);
             return `
-            <div class="qz-row flex items-center gap-2 p-2 flex-wrap text-sm">
-              <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
-              <input class="qz-input flex-1" style="min-width:120px;padding:6px 8px;font-size:14px"
-                value="${escapeHtml(t.name)}" data-action="rename" data-id="${t.id}">
-              <label class="qz-muted flex items-center gap-1">スコア
-                <input type="number" class="qz-input" style="width:4.5rem;padding:4px;text-align:center;font-weight:700;color:var(--coral)"
-                  value="${t.score || 0}" data-action="score" data-id="${t.id}">
-              </label>
-              <span class="qz-muted">代表 ${
-                t.representative
-                  ? `<span class="">${escapeHtml(
-                      t.representative
-                    )}</span>`
-                  : `<span class="qz-muted">未登録</span>`
-              }</span>
-              <button class="qz-btn" style="font-size:10px;padding:4px 8px"
-                data-action="clear-rep" data-id="${t.id}">代表クリア</button>
-              <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
-                data-action="delete" data-id="${t.id}">削除</button>
+            <div class="qz-row p-2 space-y-1.5 text-sm">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
+                <input class="qz-input flex-1" style="min-width:120px;padding:6px 8px;font-size:14px"
+                  value="${escapeHtml(t.name)}" placeholder="代表者名" data-action="rename" data-id="${t.id}">
+                <label class="qz-muted flex items-center gap-1">スコア
+                  <input type="number" class="qz-input" style="width:4.5rem;padding:4px;text-align:center;font-weight:700;color:var(--coral)"
+                    value="${t.score || 0}" data-action="score" data-id="${t.id}">
+                </label>
+                ${
+                  t.readyAt || members.length
+                    ? `<button class="qz-btn" style="font-size:10px;padding:4px 8px"
+                        data-action="clear-entry" data-id="${t.id}">受付取消</button>`
+                    : ""
+                }
+                <button class="qz-btn qz-btn--danger" style="font-size:10px;padding:4px 8px"
+                  data-action="delete" data-id="${t.id}">削除</button>
+              </div>
+              <div class="text-xs pl-5">
+                ${
+                  t.readyAt
+                    ? `<strong class="qz-coral">✓ 受付OK</strong>`
+                    : `<span class="qz-muted">未受付</span>`
+                }
+                ${
+                  members.length
+                    ? `<span class="ml-1">${escapeHtml(members.join("・"))}</span>`
+                    : ""
+                }
+              </div>
             </div>`;
           })
           .join("");
@@ -888,8 +922,15 @@
             if (confirm("このチームを削除しますか？")) {
               guarded(() => deleteDoc(refs.team(id)));
             }
-          } else if (action === "clear-rep") {
-            guarded(() => updateDoc(refs.team(id), { representative: null }));
+          } else if (action === "clear-entry") {
+            const team = teams.find((t) => t.id === id);
+            if (
+              confirm(
+                `代表「${team?.name || ""}」のチームの受付（OK・メンバー名）を取り消しますか？\nメイン画面の受付が「待機中」に戻ります。`
+              )
+            ) {
+              guarded(() => updateDoc(refs.team(id), { members: [], readyAt: null }));
+            }
           }
         });
       document
@@ -984,7 +1025,8 @@
             await addDoc(refs.teams(), {
               name,
               score: 0,
-              representative: null,
+              members: [],
+              readyAt: null,
               order,
             });
             form.reset();
@@ -1008,7 +1050,8 @@
             batch.set(newRef, {
               name: defaults[i],
               score: 0,
-              representative: null,
+              members: [],
+              readyAt: null,
               order: base + i,
             });
           }
@@ -1365,6 +1408,18 @@
 
       // ---- 進行 ----
 
+      document.getElementById("btn-intro").addEventListener("click", () => {
+        runOp(() => updateDoc(stateRef, { status: "intro" }));
+      });
+
+      document.getElementById("btn-join").addEventListener("click", () => {
+        if (teams.length === 0) {
+          alert("先にチーム（代表者名）を登録してください");
+          return;
+        }
+        runOp(() => updateDoc(stateRef, { status: "join" }));
+      });
+
       document
         .getElementById("btn-start")
         .addEventListener("click", () => {
@@ -1482,7 +1537,7 @@
         .addEventListener("click", () => {
           if (
             !confirm(
-              "スコアと回答をリセットします。問題とチームは残ります。よろしいですか？"
+              "スコア・回答・受付（OK・メンバー名）をリセットします。問題とチーム（代表者名）は残ります。よろしいですか？"
             )
           )
             return;
@@ -1491,7 +1546,7 @@
             const batch = writeBatch(db);
             ansSnap.docs.forEach((d) => batch.delete(d.ref));
             teams.forEach((t) =>
-              batch.update(refs.team(t.id), { score: 0, representative: null })
+              batch.update(refs.team(t.id), { score: 0, members: [], readyAt: null })
             );
             // リハーサルで決めた「当日の正解」を本番に持ち越さない
             quizzes

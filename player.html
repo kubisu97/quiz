@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261023a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261027a" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -42,7 +42,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261023a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261027a" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -50,7 +50,7 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js?v=20261023a"></script>
+    <script src="env.js?v=20261027a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -65,27 +65,36 @@
         mountConnectionBanner,
         mountRehearsalBadge,
         safeStorage,
+        teamMembers,
         isLiveQuiz,
         correctIndexOf,
         choiceLetter,
         onSnapshot,
         setDoc,
         updateDoc,
-        addDoc,
-        getDocs,
         getDoc,
         query,
         orderBy,
-      } from "./js/firebase-init.js?v=20261023a";
+      } from "./js/firebase-init.js?v=20261027a";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
       const params = new URLSearchParams(location.search);
-      // チームは URL の ?team= か、localStorage に保存した参加履歴で決まる。
-      // どちらも無ければチーム名入力フォームを出して自己登録させる。
+      // チームはメイン画面のチーム別 QR（?team=）か、localStorage に保存した参加履歴で決まる。
+      // どちらも無ければ登録済みチームの一覧から選ばせる（QR を読み取れなかった人向け）。
       // キーは APP_ID ごとに分ける（リハーサルの参加情報が本番に残らないように）。
       const JOIN_KEY = `enkai:${APP_ID}:joinedTeam`;
-      let teamId = params.get("team") || safeStorage.get(JOIN_KEY) || null;
+      const qrTeamId = params.get("team");
+      let teamId = qrTeamId || safeStorage.get(JOIN_KEY) || null;
+      // ?team= は最初の 1 回だけ使う。URL に残すと「チーム変更」しても再読み込みで戻ってしまう。
+      if (qrTeamId) {
+        try {
+          const url = new URL(location.href);
+          url.searchParams.delete("team");
+          history.replaceState(null, "", url);
+        } catch {}
+      }
+      let qrTeamMissing = false;
 
       function debug(msg) {
         if (debugEl) debugEl.textContent = `v${APP_VERSION} [${new Date().toLocaleTimeString()}] ${msg}`;
@@ -116,19 +125,18 @@
         throw err;
       }
 
-      let repKey = null;
       function setTeam(id) {
         teamId = id;
-        repKey = `enkai:${APP_ID}:team:${id}:rep`;
         safeStorage.set(JOIN_KEY, id);
       }
 
-      // 保存済みチームが削除・リセット済みなら参加情報を捨ててフォームに戻す。
+      // 保存済みチームが削除済みなら参加情報を捨ててチーム選択に戻す。
       if (teamId) {
         try {
           const snap = await getDoc(refs.team(teamId));
           if (!snap.exists()) {
-            debug(`保存チームが存在しない: ${teamId}`);
+            debug(`チームが存在しない: ${teamId}`);
+            if (teamId === qrTeamId) qrTeamMissing = true;
             safeStorage.remove(JOIN_KEY);
             teamId = null;
           }
@@ -138,6 +146,10 @@
       }
       if (teamId) setTeam(teamId);
 
+      // 受付済みでもメンバーを直せるようにする（OK を押し直すまで入力フォームを出す）
+      let editingMembers = false;
+      const MAX_MEMBERS = 20;
+
       root.addEventListener("click", (e) => {
         const choiceBtn = e.target.closest("button[data-choice]");
         if (choiceBtn) {
@@ -146,25 +158,45 @@
             return;
           }
           const choice = parseInt(choiceBtn.dataset.choice, 10);
-          const repName = safeStorage.get(repKey);
           debug(`タップ検知: ${choiceLetter(choice)} (choice=${choice})`);
-          if (!repName) {
-            debug("代表者名が未登録");
-            return;
-          }
-          submitAnswer(choice, repName);
+          submitAnswer(choice);
           return;
         }
-        if (e.target.id === "btn-change-rep") {
-          if (confirm("代表者名を変更しますか？")) {
-            safeStorage.remove(repKey);
-            render();
-          }
+        const pickBtn = e.target.closest("button[data-pick-team]");
+        if (pickBtn) {
+          const id = pickBtn.dataset.pickTeam;
+          const name = pickerTeams?.find((t) => t.id === id)?.name || "";
+          if (!confirm(`代表「${name}」のチームで参加しますか？`)) return;
+          stopTeamPicker();
+          qrTeamMissing = false;
+          setTeam(id);
+          startTeamSubscription();
+          syncQuizSubscriptions();
+          debug(`チーム選択: ${name} (${id})`);
+          root.innerHTML = `<p class="text-center qz-onDark-muted">読み込み中...</p>`;
+          return;
+        }
+        if (e.target.id === "btn-add-member") {
+          const box = document.getElementById("member-inputs");
+          const count = box.querySelectorAll("input[name=member]").length;
+          if (count >= MAX_MEMBERS) return;
+          box.insertAdjacentHTML("beforeend", memberInputHtml("", count));
+          box.lastElementChild.focus();
+          return;
+        }
+        if (e.target.id === "btn-edit-members") {
+          editingMembers = true;
+          render();
+          return;
+        }
+        if (e.target.id === "btn-cancel-members") {
+          editingMembers = false;
+          root.innerHTML = "";
+          render();
           return;
         }
         if (e.target.id === "btn-leave-team") {
           if (!confirm("別のチームで参加し直しますか？")) return;
-          if (repKey) safeStorage.remove(repKey);
           safeStorage.remove(JOIN_KEY);
           if (teamUnsub) {
             teamUnsub();
@@ -172,51 +204,40 @@
           }
           store.team = null;
           teamId = null;
-          repKey = null;
+          editingMembers = false;
           syncQuizSubscriptions();
-          renderJoinForm();
+          renderTeamPicker();
         }
       });
 
       root.addEventListener("submit", async (e) => {
-        if (e.target.id === "join-form") {
-          e.preventDefault();
-          const btn = e.target.querySelector("button[type=submit]");
-          const teamName = e.target.teamName.value.trim();
-          const rep = e.target.rep.value.trim();
-          if (!teamName || !rep) return;
-          btn.disabled = true;
-          btn.textContent = "参加中...";
-          debug(`チーム自己登録: ${teamName} / ${rep}`);
-          try {
-            const id = await joinTeam(teamName, rep);
-            setTeam(id);
-            safeStorage.set(repKey, rep);
-            startTeamSubscription();
-            syncQuizSubscriptions();
-            debug(`参加OK: ${teamName} (${id})`);
-          } catch (err) {
-            debug(`参加失敗: ${err.message}`);
-            alert("参加に失敗しました: " + describeError(err));
-            btn.disabled = false;
-            btn.textContent = "このチームで参加する";
-          }
+        if (e.target.id !== "members-form") return;
+        e.preventDefault();
+        const btn = e.target.querySelector("button[type=submit]");
+        const members = [...e.target.querySelectorAll("input[name=member]")]
+          .map((el) => el.value.trim())
+          .filter(Boolean)
+          .slice(0, MAX_MEMBERS);
+        if (members.length === 0) {
+          alert("1 人以上の名前を入力してください");
           return;
         }
-        if (e.target.id === "rep-form") {
-          e.preventDefault();
-          const rep = e.target.rep.value.trim();
-          if (!rep) return;
-          debug(`代表者登録: ${rep}`);
-          safeStorage.set(repKey, rep);
-          try {
-            await updateDoc(refs.team(teamId), { representative: rep });
-            debug(`代表者書き込みOK: ${rep}`);
-            render();
-          } catch (err) {
-            debug(`代表者書き込み失敗: ${err.message}`);
-            alert("代表者登録に失敗しました: " + describeError(err));
-          }
+        btn.disabled = true;
+        btn.textContent = "送信中...";
+        debug(`メンバー送信: ${members.length} 人`);
+        try {
+          await updateDoc(refs.team(teamId), {
+            members,
+            readyAt: store.team?.readyAt || Date.now(),
+          });
+          editingMembers = false;
+          debug(`受付OK: ${members.join("・")}`);
+          render();
+        } catch (err) {
+          debug(`受付失敗: ${err.message}`);
+          alert("送信に失敗しました: " + describeError(err));
+          btn.disabled = false;
+          btn.textContent = "OK";
         }
       });
 
@@ -232,30 +253,14 @@
       let lastSubscribedQuizId = null;
       let teamUnsub = null;
 
-      // 同名チームがあれば再利用し、無ければ新規作成する。
-      // 一度離脱した代表者が同じ名前で戻ってきてもスコアを引き継げる。
-      async function joinTeam(teamName, rep) {
-        const snap = await getDocs(query(refs.teams(), orderBy("order")));
-        const docs = snap.docs;
-        const existing = docs.find(
-          (d) =>
-            String(d.data().name || "").trim().toLowerCase() ===
-            teamName.toLowerCase()
-        );
-        if (existing) {
-          await updateDoc(refs.team(existing.id), { representative: rep });
-          return existing.id;
-        }
-        const order = docs.length
-          ? Math.max(...docs.map((d) => d.data().order || 0)) + 1
-          : 0;
-        const created = await addDoc(refs.teams(), {
-          name: teamName,
-          score: 0,
-          representative: rep,
-          order,
-        });
-        return created.id;
+      // QR を読み取れなかった人向けのチーム一覧。チーム選択中だけ購読する。
+      let pickerTeams = null;
+      let pickerUnsub = null;
+
+      function stopTeamPicker() {
+        if (pickerUnsub) pickerUnsub();
+        pickerUnsub = null;
+        pickerTeams = null;
       }
 
       function startTeamSubscription() {
@@ -264,14 +269,15 @@
           refs.team(teamId),
           (snap) => {
             if (!snap.exists()) {
-              // 司会者が削除／リセットした場合は参加フォームに戻す
+              // 司会者が削除した場合はチーム選択に戻す
               debug("チームが削除されました");
               safeStorage.remove(JOIN_KEY);
               store.team = null;
               teamId = null;
+              editingMembers = false;
               if (teamUnsub) teamUnsub();
               teamUnsub = null;
-              renderJoinForm();
+              renderTeamPicker();
               return;
             }
             store.team = { id: snap.id, ...snap.data() };
@@ -282,7 +288,7 @@
       }
 
       if (teamId) startTeamSubscription();
-      else renderJoinForm();
+      else renderTeamPicker();
 
       onSnapshot(
         refs.state(),
@@ -338,95 +344,138 @@
         return TEAM_COLORS[idx % TEAM_COLORS.length];
       }
 
-      function headerHtml(repName) {
+      function headerHtml() {
         const color = teamColor();
+        const members = teamMembers(store.team);
         return `
           <header class="qz-card qz-card--tight px-4 py-3 flex items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 shrink-0" style="background-color:${color}"></span>
+                <span class="text-[10px] qz-muted shrink-0">代表</span>
                 <span class="qz-jp-head text-base truncate">${escapeHtml(
                   store.team.name
                 )}</span>
               </div>
-              <div class="text-[11px] qz-muted mt-0.5">
-                代表 <span style="color:var(--ink)">${escapeHtml(repName)}</span>
+              <div class="text-[11px] qz-muted mt-0.5 truncate">
+                ${
+                  members.length
+                    ? `<span style="color:var(--ink)">${escapeHtml(members.join("・"))}</span>`
+                    : "メンバー未入力"
+                }
               </div>
             </div>
             <div class="flex flex-col gap-1 shrink-0">
-              <button id="btn-change-rep" class="text-[10px] underline qz-muted">名前変更</button>
+              <button id="btn-edit-members" class="text-[10px] underline qz-muted">メンバー変更</button>
               <button id="btn-leave-team" class="text-[10px] underline qz-muted">チーム変更</button>
             </div>
           </header>`;
       }
 
-      function renderJoinForm() {
-        root.innerHTML = `
-          <header class="text-center pt-4 pb-1">
-            <p class="qz-display qz-display--cream" style="font-size:2.75rem">Wedding</p>
-            <p class="qz-display qz-display--pink" style="font-size:2.75rem">Quiz</p>
-            <p class="qz-label qz-onDark-muted mt-2">Team Registration</p>
-          </header>
-          <section class="qz-card p-5 space-y-4">
-            <h1 class="qz-jp-head text-lg">チームを作って参加</h1>
-            <p class="text-xs leading-relaxed qz-muted">
-              チーム名と代表者のお名前を入力してください。<br />
-              同じチーム名がすでにある場合はそのチームに合流します。
-            </p>
-            <form id="join-form" class="space-y-3">
-              <label class="block">
-                <span class="qz-label" style="color:var(--forest);font-size:10px">Team name</span>
-                <input type="text" name="teamName" required minlength="1" maxlength="20"
-                  placeholder="例: さくらテーブル"
-                  class="qz-input mt-1" autocomplete="off" autofocus />
-              </label>
-              <label class="block">
-                <span class="qz-label" style="color:var(--forest);font-size:10px">Your name</span>
-                <input type="text" name="rep" required minlength="1" maxlength="20"
-                  placeholder="例: やまだ"
-                  class="qz-input mt-1" autocomplete="off" />
-              </label>
-              <button type="submit" class="qz-btn qz-btn--primary w-full">
-                このチームで参加する
-              </button>
-            </form>
-          </section>
-          <p class="text-[11px] text-center qz-onDark-muted">
-            ※ 代表者のスマホで回答します
-          </p>
-        `;
-      }
-
-      function renderRepForm() {
-        const existing = store.team.representative;
-        const color = teamColor();
-        root.innerHTML = `
+      function brandHeaderHtml(sub) {
+        return `
           <header class="text-center pt-4 pb-1">
             <p class="qz-display qz-display--cream" style="font-size:2.5rem">Wedding</p>
             <p class="qz-display qz-display--pink" style="font-size:2.5rem">Quiz</p>
-            <div class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 qz-panel">
-              <span class="w-3 h-3" style="background-color:${color}"></span>
-              <span class="text-sm font-bold">${escapeHtml(store.team.name)}</span>
-            </div>
-          </header>
-          <section class="qz-card p-5 space-y-4">
-            <h1 class="qz-jp-head text-lg">代表者の名前を入力</h1>
+            ${sub}
+          </header>`;
+      }
+
+      // QR を読み取れなかった人向け: 登録済みチームを代表者名で選ぶ
+      // 起動直後（下の let 宣言より前）にも呼ばれるので、ここでは votingRenderKey 等に触らない
+      function renderTeamPicker() {
+        if (!pickerUnsub) {
+          pickerUnsub = onSnapshot(
+            query(refs.teams(), orderBy("order")),
+            (snap) => {
+              pickerTeams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              if (!teamId) renderTeamPicker();
+            },
+            (err) => conn.error(err)
+          );
+        }
+        const list =
+          pickerTeams === null
+            ? `<p class="text-xs qz-muted">読み込み中...</p>`
+            : pickerTeams.length === 0
+            ? `<p class="qz-panel--pink text-xs p-3 leading-relaxed">まだチームが登録されていません。司会者の案内をお待ちください。</p>`
+            : pickerTeams
+                .map(
+                  (t) => `
+              <button type="button" class="qz-btn w-full" data-pick-team="${t.id}"
+                style="display:flex;align-items:center;gap:10px;padding:14px">
+                <span class="w-3 h-3 shrink-0" style="background-color:${
+                  TEAM_COLORS[(t.order ?? 0) % TEAM_COLORS.length]
+                }"></span>
+                <span class="text-[11px] qz-muted">代表</span>
+                <span class="truncate">${escapeHtml(t.name)}</span>
+              </button>`
+                )
+                .join("");
+        root.innerHTML = `
+          ${brandHeaderHtml('<p class="qz-label qz-onDark-muted mt-2">Entry</p>')}
+          <section id="team-picker" class="qz-card p-5 space-y-4">
+            <h1 class="qz-jp-head text-lg">チームを選んで参加</h1>
+            <p class="text-xs leading-relaxed qz-muted">
+              メイン画面に出ている、自分のチームの代表者さんの QR コードを読み込んでください。<br />
+              読み込めないときは、下から代表者さんの名前を選んでください。
+            </p>
             ${
-              existing
-                ? `<p class="qz-panel--pink text-xs p-3 leading-relaxed">
-                    現在の代表者: <strong>${escapeHtml(existing)}</strong><br />
-                    別の端末が登録済みです。新しい名前で上書きすると代表者が交代します。
+              qrTeamMissing
+                ? `<p class="qz-panel--pink text-xs p-3 leading-relaxed font-bold" style="color:#c0392b">
+                    読み込んだ QR コードのチームが見つかりませんでした。もう一度読み込むか、下から選んでください。
                   </p>`
                 : ""
             }
-            <form id="rep-form" class="space-y-3">
-              <input type="text" name="rep" required minlength="1" maxlength="20"
-                placeholder="お名前 (例: やまだ)" class="qz-input" autofocus />
-              <button type="submit" class="qz-btn qz-btn--primary w-full">
-                このチームで参加する
+            <div class="space-y-2">${list}</div>
+          </section>
+        `;
+      }
+
+      function memberInputHtml(value, i) {
+        return `<input type="text" name="member" maxlength="20" autocomplete="off"
+          value="${escapeHtml(value)}" placeholder="${i + 1} 人目のお名前" class="qz-input" />`;
+      }
+
+      // 受付: チーム全員の名前を入れて OK。最初の欄には代表者名を入れておく。
+      function renderMembersForm() {
+        const t = store.team;
+        const existing = teamMembers(t);
+        const values = existing.length ? [...existing, ""] : [t.name || "", "", "", ""];
+        const color = teamColor();
+        root.innerHTML = `
+          ${brandHeaderHtml(`
+            <div class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 qz-panel">
+              <span class="w-3 h-3" style="background-color:${color}"></span>
+              <span class="text-[11px]">代表</span>
+              <span class="text-sm font-bold">${escapeHtml(t.name)}</span>
+            </div>`)}
+          <section class="qz-card p-5 space-y-4">
+            <h1 class="qz-jp-head text-lg">チーム全員の名前を入力</h1>
+            <p class="text-xs leading-relaxed qz-muted">
+              一緒に回答するメンバー全員の名前を入れて、OK を押してください。<br />
+              名前はメイン画面に表示されます。
+            </p>
+            <form id="members-form" class="space-y-3">
+              <div id="member-inputs" class="space-y-2">
+                ${values.map((v, i) => memberInputHtml(v, i)).join("")}
+              </div>
+              <button type="button" id="btn-add-member" class="qz-btn w-full" style="font-size:13px">
+                ＋ 入力欄を追加
               </button>
+              <button type="submit" class="qz-btn qz-btn--primary w-full" style="font-size:1.25rem;padding:14px">
+                OK
+              </button>
+              ${
+                editingMembers
+                  ? `<button type="button" id="btn-cancel-members" class="qz-btn qz-btn--ghost w-full" style="font-size:12px">キャンセル</button>`
+                  : ""
+              }
             </form>
           </section>
+          <p class="text-[11px] text-center qz-onDark-muted">
+            ※ 回答はこのスマホで行います
+          </p>
         `;
       }
 
@@ -434,20 +483,23 @@
       function render() {
         if (!teamId) {
           votingRenderKey = null;
-          // 入力途中のフォームを state 更新で消さないよう、未表示のときだけ描く
-          if (!document.getElementById("join-form")) renderJoinForm();
+          if (!document.getElementById("team-picker")) renderTeamPicker();
           return;
         }
         if (!store.team || !store.state) return;
-        const savedRep = safeStorage.get(repKey);
-        if (!savedRep) {
+        const status = store.state.status;
+        const inQuestion = status === "voting" || status === "closed";
+        if (inQuestion) editingMembers = false;
+        // 開始前（説明・受付中）でまだ OK を押していなければ受付フォーム。
+        // 出題中は回答を優先し、フォームは出さない。
+        const lobby = !inQuestion && status !== "result" && status !== "final_ranking";
+        if (editingMembers || (lobby && !store.team.readyAt)) {
           votingRenderKey = null;
-          // 同じ理由で、代表者名フォームも入力中は再描画しない
-          if (!document.getElementById("rep-form")) renderRepForm();
+          // 入力途中のフォームを state 更新で消さないよう、未表示のときだけ描く
+          if (!document.getElementById("members-form")) renderMembersForm();
           return;
         }
-        const status = store.state.status;
-        if (status === "voting" || status === "closed") {
+        if (inQuestion) {
           // 同じ問題・同じステータスの間は全再描画せず選択状態のみ更新
           const key = `${store.state.currentQuizId || ""}:${status}:${
             store.quiz ? "q" : "l"
@@ -457,18 +509,43 @@
             return;
           }
           votingRenderKey = key;
-          renderVoting(savedRep);
+          renderVoting();
           return;
         }
         votingRenderKey = null;
-        if (status === "result") renderResult(savedRep);
-        else if (status === "final_ranking") renderFinal(savedRep);
-        else renderWaiting(savedRep);
+        if (status === "result") renderResult();
+        else if (status === "final_ranking") renderFinal();
+        else renderWaiting();
       }
 
-      function renderWaiting(repName) {
+      function renderWaiting() {
+        const notStarted = (store.state.currentQuizIndex ?? -1) < 0;
+        if (notStarted) {
+          const members = teamMembers(store.team);
+          root.innerHTML =
+            headerHtml() +
+            `<section class="qz-card p-6 text-center space-y-4">
+              <p class="qz-display qz-display--coral" style="font-size:2.75rem">OK!</p>
+              <h1 class="qz-jp-head text-base">受付が完了しました</h1>
+              <p class="text-xs qz-muted leading-relaxed">
+                メイン画面にチームの名前が表示されます。<br />
+                クイズが始まるまで、この画面のままお待ちください
+              </p>
+              ${
+                members.length
+                  ? `<div class="qz-panel--pink p-4">
+                      <div class="qz-label" style="color:var(--forest);font-size:10px">Members</div>
+                      <div class="text-sm font-bold mt-1 leading-relaxed">${members
+                        .map((m) => `<span style="display:inline-block">${escapeHtml(m)}</span>`)
+                        .join("・")}</div>
+                    </div>`
+                  : ""
+              }
+            </section>`;
+          return;
+        }
         root.innerHTML =
-          headerHtml(repName) +
+          headerHtml() +
           `<section class="qz-card p-6 text-center space-y-4">
             <p class="qz-display" style="font-size:2.25rem">Stand by</p>
             <h1 class="qz-jp-head text-base">次の問題を待っています</h1>
@@ -513,10 +590,10 @@
         return remaining === Infinity ? "受付中" : String(remaining);
       }
 
-      function renderVoting(repName) {
+      function renderVoting() {
         if (!store.quiz) {
           root.innerHTML =
-            headerHtml(repName) +
+            headerHtml() +
             `<section class="qz-card p-6 text-center qz-muted text-sm">
               問題を読み込み中...
             </section>`;
@@ -528,7 +605,7 @@
         const locked = isLocked();
 
         root.innerHTML =
-          headerHtml(repName) +
+          headerHtml() +
           `
           <section class="qz-card p-4 space-y-3">
             <div class="flex items-center justify-between gap-3">
@@ -627,7 +704,7 @@
         if (statusEl) statusEl.innerHTML = voteStatusHtml(answered, remaining);
       }
 
-      function renderResult(repName) {
+      function renderResult() {
         const quiz = store.quiz;
         const answered = store.answer;
         const correct = correctIndexOf(quiz, store.state);
@@ -639,7 +716,7 @@
           ? "Correct"
           : "Wrong";
         root.innerHTML =
-          headerHtml(repName) +
+          headerHtml() +
           `
           <section class="qz-card p-6 text-center space-y-3">
             <p class="qz-display ${
@@ -680,10 +757,10 @@
           </section>`;
       }
 
-      function renderFinal(repName) {
+      function renderFinal() {
         const color = teamColor();
         root.innerHTML =
-          headerHtml(repName) +
+          headerHtml() +
           `
           <section class="qz-card p-6 text-center space-y-4">
             <p class="qz-display" style="font-size:2.5rem">Thank you</p>
@@ -703,7 +780,7 @@
           </section>`;
       }
 
-      async function submitAnswer(choice, repName) {
+      async function submitAnswer(choice) {
         if (store.submitting) {
           debug("送信中のためスキップ");
           return;
@@ -733,7 +810,7 @@
             quizId,
             teamId,
             choice,
-            representative: repName,
+            representative: store.team?.name || null,
             answeredAt: Date.now(),
           });
           debug(`送信成功: ${letter}`);
