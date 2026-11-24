@@ -1656,9 +1656,19 @@
           const file = e.target.files[0];
           if (!file) return;
           try {
-            let dataUrl = await fileToResizedDataUrl(file, 800, 0.8);
-            if (dataUrl.length > 900_000) {
-              dataUrl = await fileToResizedDataUrl(file, 600, 0.7);
+            // プロジェクターで横長の画像（4枚並べなど）がぼやけないよう、長い辺 1600px から試す。
+            // Firestore の 1 ドキュメント 1MB に収まるまで段階的に小さくする
+            const steps = [
+              [1600, 0.85],
+              [1600, 0.75],
+              [1200, 0.75],
+              [800, 0.8],
+              [600, 0.7],
+            ];
+            let dataUrl = null;
+            for (const [size, quality] of steps) {
+              dataUrl = await fileToResizedDataUrl(file, size, quality);
+              if (dataUrl.length <= 900_000) break;
             }
             if (dataUrl.length > 900_000) {
               alert(
