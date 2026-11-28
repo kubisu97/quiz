@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128a" />
     <style>
       /* main.html 固有 */
       body {
@@ -74,6 +74,17 @@
       @keyframes mq-caret {
         50% {
           opacity: 0;
+        }
+      }
+
+      /* 最終結果: 発表された順位が飛び出してくる */
+      .mq-reveal {
+        animation: mq-reveal 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+      }
+      @keyframes mq-reveal {
+        from {
+          opacity: 0;
+          transform: scale(0.9) translateY(14px);
         }
       }
 
@@ -180,7 +191,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128a" />
   </head>
   <body>
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
@@ -218,8 +229,8 @@
     </button>
     <div id="media-status" class="fixed bottom-2 right-3 z-40 text-[11px] qz-onDark-muted pointer-events-none"></div>
 
-    <script src="env.js?v=20261027b"></script>
-    <script src="vendor/qrcode.min.js?v=20261027b"></script>
+    <script src="env.js?v=20261128a"></script>
+    <script src="vendor/qrcode.min.js?v=20261128a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -245,7 +256,11 @@
         where,
         startAutoTimer,
         finishAnswerVideo,
-      } from "./js/firebase-init.js?v=20261027b";
+        rankTeams,
+        finalRevealedCount,
+        teamLetter,
+        teamLabel,
+      } from "./js/firebase-init.js?v=20261128a";
 
       const root = document.getElementById("root");
       const overlay = document.getElementById("start-overlay");
@@ -841,7 +856,8 @@
           mountedVideoUrl = null;
           return;
         }
-        const key = `${quiz.id}|${url}|${state?.votingStartedAt ?? ""}`;
+        // カウント開始（votingStartedAt）では動画を読み込み直さないよう、出題時の印（videoCue）で見分ける
+        const key = `${quiz.id}|${url}|${state?.videoCue ?? ""}`;
         if (videoKey !== key) {
           videoKey = key;
           videoEl.src = resolveVideoSrc(url);
@@ -958,6 +974,13 @@
       let resultRenderSig = null;
       let questionTypingTimer = null;
       let typedQuizId = null;
+      let finalRenderSig = null;
+      let finalShownCount = null;
+
+      // 問題文は司会者の合図（questionShownAt）で流す。同じ合図では 1 回だけ。
+      function typedKeyOf(quiz) {
+        return `${quiz.id}|${state.questionShownAt}`;
+      }
 
       function stopQuestionTyping() {
         if (questionTypingTimer) clearTimeout(questionTypingTimer);
@@ -1006,6 +1029,10 @@
       function render() {
         // 出題中は右下の動画準備表示を出さない（ゲストに見せる画面なので）
         document.body.dataset.status = state?.status || "";
+        if (state?.status !== "final_ranking") {
+          finalRenderSig = null;
+          finalShownCount = null;
+        }
         if (!state) {
           votingRenderKey = null;
           resultRenderSig = null;
@@ -1141,6 +1168,7 @@
       function renderJoin() {
         typedQuizId = null;
         const sig = JSON.stringify(["join", teams.map((t) => [t.id, t.name])]);
+        // チームA〜 は並び順から決まるので、並びが変われば上の sig（id の並び）も変わる
         if (lobbyRenderSig === sig && document.getElementById("mq-join")) {
           updateJoinStatus(false);
           return;
@@ -1169,7 +1197,8 @@
                           (t, i) => `
                         <section class="mq-entry qz-card p-4 flex flex-col items-center text-center"
                           data-team="${t.id}" style="border-top:10px solid ${teamColor(i)}">
-                          <div class="qz-label qz-muted" style="font-size:11px">代表</div>
+                          <div class="qz-jp-head" style="font-size:1.25rem;color:var(--coral)">${teamLabel(i)}</div>
+                          <div class="qz-label qz-muted mt-1" style="font-size:11px">代表</div>
                           <div class="qz-jp-head truncate w-full" style="font-size:1.6rem">${escapeHtml(
                             t.name
                           )}</div>
@@ -1318,7 +1347,9 @@
                   <div class="flex items-center gap-2 px-3 py-2"
                     style="border:2.4px solid ${color};background:var(--pink-soft)">
                     <span class="w-3 h-3" style="background-color:${color}"></span>
-                    <span class="qz-jp-head text-lg">${escapeHtml(t.name)}</span>
+                    <span class="qz-jp-head text-lg"><span class="qz-coral">${teamLabel(
+                      t.origIndex
+                    )}</span> ${escapeHtml(t.name)}</span>
                   </div>`;
                 })
                 .join("")}
@@ -1341,9 +1372,9 @@
                   const pct = ((t.score || 0) / max) * 100;
                   return `
                   <div class="flex items-center gap-2.5 text-xs">
-                    <div class="w-24 font-bold truncate">${escapeHtml(
-                      t.name
-                    )}</div>
+                    <div class="w-24 font-bold truncate"><span class="qz-coral">${teamLetter(
+                      t.origIndex
+                    )}</span> ${escapeHtml(t.name)}</div>
                     <div class="flex-1 h-4" style="background:var(--sage-soft);border:1.5px solid var(--forest)">
                       <div class="h-full" style="width:${pct}%;background-color:${color}"></div>
                     </div>
@@ -1396,8 +1427,15 @@
           ? "#d9a84e"
           : "#174c39";
 
-        // 文字送りは最初に出題したときだけ。締切画面・再描画では全文をそのまま出す。
-        const typeNow = !closed && typedQuizId !== quiz.id;
+        // 問題文は司会者の合図が来るまで伏せておく。締切後は合図が無くても全文を出す。
+        const shown = closed || !!state.questionShownAt;
+        // 文字送りは合図が来たときだけ。締切画面・再読み込み（合図から時間が経っている）では全文をそのまま出す。
+        const typeNow =
+          !closed &&
+          !!state.questionShownAt &&
+          typedQuizId !== typedKeyOf(quiz) &&
+          Date.now() - state.questionShownAt < 20000;
+        if (state.questionShownAt) typedQuizId = typedKeyOf(quiz);
 
         // 上: 問題文＋タイマー / 中: メディアを1カラムで大きく
         // 下: 選択肢と回答状況を2カラム
@@ -1429,7 +1467,7 @@
                     quiz.question
                   )}</span>
                   <span id="question-text" class="mq-type-live">${
-                    typeNow ? "" : escapeHtml(quiz.question)
+                    typeNow || !shown ? "" : escapeHtml(quiz.question)
                   }</span>
                 </span>
               </div>
@@ -1512,7 +1550,6 @@
           </div>
         `;
         if (typeNow) {
-          typedQuizId = quiz.id;
           typeQuestion(quiz.question);
         } else {
           stopQuestionTyping();
@@ -1542,7 +1579,7 @@
                     }"
                       style="border:1.5px solid ${color};background:rgba(0,0,0,.2)">
                       <span class="w-2 h-2 shrink-0" style="background-color:${color}"></span>
-                      <span class="truncate flex-1">${escapeHtml(t.name)}</span>
+                      <span class="truncate flex-1"><strong>${teamLetter(i)}</strong> ${escapeHtml(t.name)}</span>
                       ${
                         answered
                           ? '<span class="qz-coral shrink-0 font-bold">✓</span>'
@@ -1565,6 +1602,14 @@
           }
         }
         applyVideoState(false);
+        // 「問題文を流す」の合図が届いたら、画面を描き直さずに文字送りを始める
+        if (state.status === "voting" && state.questionShownAt) {
+          const quiz = quizzes.find((q) => q.id === state.currentQuizId);
+          if (quiz && typedQuizId !== typedKeyOf(quiz)) {
+            typedQuizId = typedKeyOf(quiz);
+            typeQuestion(quiz.question);
+          }
+        }
         if (state.status !== "voting" || !state.durationMs) return; // 無制限・締切後はカウントダウンしない
         const duration = state.durationMs;
         const elapsed = Date.now() - (state.votingStartedAt || Date.now());
@@ -1721,7 +1766,7 @@
                             style="border:1.5px solid ${color};background:rgba(0,0,0,.2)">
                             <div class="flex items-center gap-1.5 qz-onDark-muted" style="font-size:10px">
                               <span class="w-2 h-2" style="background-color:${color}"></span>
-                              ${escapeHtml(t.name)}
+                              <strong>${teamLetter(i)}</strong> ${escapeHtml(t.name)}
                             </div>
                             <div class="mt-0.5">
                               ${
@@ -1752,11 +1797,25 @@
       }
 
       function renderFinal() {
-        const sorted = [...teams]
-          .map((t, i) => ({ ...t, origIndex: i }))
-          .sort((a, b) => (b.score || 0) - (a.score || 0));
+        const sorted = rankTeams(teams);
+        const total = sorted.length;
+        // 司会者が管理画面で押すたびに、下位から 1 チームずつ発表する
+        const revealed = finalRevealedCount(state, total);
+        const sig = JSON.stringify([
+          revealed,
+          sorted.map((t) => [t.id, t.name, t.score, teamMembers(t)]),
+        ]);
+        if (sig === finalRenderSig && document.getElementById("mq-final")) return;
+        finalRenderSig = sig;
+        // 今回新しく発表された分だけアニメーションさせる（再読み込み時は付けない）
+        const fresh =
+          finalShownCount !== null && revealed > finalShownCount
+            ? revealed - finalShownCount
+            : 0;
+        finalShownCount = revealed;
+        const firstShown = total - revealed;
         root.innerHTML = `
-          <header class="text-center shrink-0 mb-5">
+          <header id="mq-final" class="text-center shrink-0 mb-5">
             <p class="qz-display qz-display--cream" style="font-size:clamp(3rem,7vw,5.5rem)">Final Result</p>
             <p class="qz-label qz-onDark-muted mt-1">Thank you for playing</p>
           </header>
@@ -1765,11 +1824,21 @@
               ${sorted
                 .map((t, rank) => {
                   const color = teamColor(t.origIndex);
+                  if (rank < firstShown) {
+                    // まだ発表していない順位。チーム名も点数も伏せる
+                    return `
+                  <div class="qz-panel flex items-center gap-4 p-4" style="opacity:.55">
+                    <div class="qz-display qz-display--pink" style="font-size:2rem;width:5rem;flex-shrink:0">${
+                      rank + 1
+                    }</div>
+                    <div class="flex-1 min-w-0 qz-onDark-muted font-black" style="font-size:1.25rem;letter-spacing:.3em">？？？</div>
+                  </div>`;
+                  }
                   const isTop = rank === 0;
                   const members = teamMembers(t);
                   return `
-                  <div class="${
-                    isTop ? "qz-card" : "qz-panel"
+                  <div class="${isTop ? "qz-card" : "qz-panel"}${
+                    rank < firstShown + fresh ? " mq-reveal" : ""
                   } flex items-center gap-4 p-4">
                     <div class="qz-display ${
                       isTop ? "qz-display--coral" : "qz-display--pink"
@@ -1782,7 +1851,9 @@
                         isTop ? "" : "qz-cream"
                       } font-black truncate" style="font-size:${
                     isTop ? "1.75rem" : "1.25rem"
-                  }">${escapeHtml(t.name)}</div>
+                  }"><span class="${isTop ? "qz-coral" : "qz-onDark-muted"}">${teamLabel(
+                    t.origIndex
+                  )}</span> ${escapeHtml(t.name)}</div>
                       ${
                         members.length
                           ? `<div class="text-xs truncate ${

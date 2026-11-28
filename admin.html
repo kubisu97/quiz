@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128a" />
     <style>
       /* admin.html 固有 */
       /* 司会者が本番でスマホから操作するので、押しやすさを優先する */
@@ -41,7 +41,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128a" />
   </head>
   <body>
     <main id="root" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
@@ -73,7 +73,8 @@
           <div class="space-y-1.5">
             <div class="text-xs qz-muted">
               クイズ開始前: 使い方 → 参加QR → 全チームが OK になったら「次の問題スタート」。
-              ジャンル説明のある問題は、1 回目で説明、2 回目で出題になります
+              ジャンル説明のある問題は、1 回目で説明、2 回目で出題になります。<br>
+              出題後は「問題文を流す」→「カウント開始」を押して進めます。最終結果は押すたびに下位から 1 チームずつ発表します
             </div>
             <div class="grid grid-cols-2 gap-2">
               <button id="btn-intro" class="qz-btn">
@@ -115,6 +116,17 @@
             >
               リセット
             </button>
+          </div>
+          <div id="cue-panel" class="hidden p-4 space-y-3" style="background:var(--pink-soft);border:2px solid var(--coral)">
+            <div>
+              <span class="qz-label" style="color:var(--coral)">Cue</span>
+              <span class="qz-jp-head block text-base mt-0.5">問題文とカウントの合図</span>
+              <p id="cue-help" class="text-xs qz-muted mt-1 leading-relaxed"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-cue-text" class="qz-btn">問題文を流す</button>
+              <button id="btn-cue-count" class="qz-btn">カウント開始</button>
+            </div>
           </div>
           <div id="live-panel" class="hidden p-4 space-y-3" style="background:var(--pink-soft);border:2px solid var(--coral)">
             <div>
@@ -181,7 +193,7 @@
                 id="btn-seed-teams"
                 class="qz-btn" style="font-size:11px;padding:6px 10px"
               >
-                デフォルト 5 チーム作成
+                チームA〜F を作成
               </button>
               <button
                 id="btn-clear-teams"
@@ -192,7 +204,8 @@
             </div>
           </div>
           <p class="text-xs qz-muted">
-            <strong>代表者名</strong>を登録すると、メイン画面の「参加QR」に代表者名とチーム専用の QR が並びます。
+            チーム名は上から順に <strong>チームA・B・C…</strong> と自動で付きます。<strong>代表者名</strong>だけ入力してください（「チームA：」と書く必要はありません）。
+            メイン画面の「参加QR」にチーム名・代表者名とチーム専用の QR が並びます。
             代表者が QR を読み込み、チーム全員の名前を入れて OK を押すと受付完了です。
           </p>
           <div id="team-list" class="space-y-2"></div>
@@ -366,7 +379,7 @@
       </div>
     </main>
 
-    <script src="env.js?v=20261027b"></script>
+    <script src="env.js?v=20261128a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -407,7 +420,12 @@
         revealAndScore,
         finishAnswerVideo,
         startAutoTimer,
-      } from "./js/firebase-init.js?v=20261027b";
+        showQuestionText,
+        startCountdown,
+        rankTeams,
+        finalRevealedCount,
+        teamLabel,
+      } from "./js/firebase-init.js?v=20261128a";
 
       const authStatus = document.getElementById("auth-status");
       const errorSlot = document.getElementById("error-slot");
@@ -438,6 +456,8 @@
         currentQuizId: null,
         currentQuizIndex: -1,
         votingStartedAt: null,
+        questionShownAt: null,
+        finalRevealCount: 0,
         durationMs: DURATION_MS,
         scoredForQuizId: null,
         revealedCorrectIndex: null,
@@ -501,6 +521,7 @@
           teams = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           renderTeams();
           renderStatus();
+          updateControlButtons();
         },
         (err) => conn.error(err)
       );
@@ -637,7 +658,26 @@
               remaining > 0
                 ? ` / 残り ${remaining} 秒で${what}`
                 : ` / ${what}中...`;
+          } else {
+            timerText = ` / <strong class="text-[var(--coral)]">カウント開始待ち（${Math.round(
+              currentState.durationMs / 1000
+            )} 秒）</strong>`;
           }
+        }
+
+        // 最終結果: 次に発表するチームを先に見せる（司会者が名前を読み上げてから押せるように）
+        let finalText = "";
+        if (status === "final_ranking") {
+          const ranked = rankTeams(teams);
+          const left = ranked.length - finalRevealedCount(currentState, ranked.length);
+          const nextTeam = ranked[left - 1];
+          finalText = nextTeam
+            ? `次に発表: <strong class="qz-coral">${left}位 ${teamLabel(
+                nextTeam.origIndex
+              )} ${escapeHtml(nextTeam.name)}（${
+                nextTeam.score || 0
+              } 点）</strong> ／ 残り ${left} チーム`
+            : "全チームの順位を発表しました";
         }
 
         let answerText = "";
@@ -672,6 +712,7 @@
               ? `<div class="qz-coral font-bold">▶ 正解発表の動画を再生中（終わるとメイン画面に正解が出ます）</div>`
               : ""
           }
+          ${finalText ? `<div>${finalText}</div>` : ""}
           <div>${
             explainQuiz
               ? `次の問題（説明中）: #${explainIndex + 1} ${escapeHtml(explainQuiz.question)}`
@@ -743,8 +784,44 @@
               ? "正解発表（動画）"
               : "正解発表・採点";
         }
-        // 採点前に最終結果へ飛ぶと、その問題の点が入らないので止める
-        final.disabled = busy || inQuestion;
+        if (status === "final_ranking") {
+          // 押すたびに下位から 1 チームずつ発表する
+          const left = teams.length - finalRevealedCount(currentState, teams.length);
+          final.disabled = busy || left <= 0;
+          final.textContent = left > 0 ? `${left}位を発表` : "順位発表 完了";
+          final.classList.toggle("qz-btn--primary", left > 0);
+        } else {
+          // 採点前に最終結果へ飛ぶと、その問題の点が入らないので止める
+          final.disabled = busy || inQuestion;
+          final.textContent = "最終結果へ（順位は伏せる）";
+          final.classList.remove("qz-btn--primary");
+        }
+
+        // 出題後の合図: 問題文を流す → カウント開始
+        const cue = document.getElementById("cue-panel");
+        const cueText = document.getElementById("btn-cue-text");
+        const cueCount = document.getElementById("btn-cue-count");
+        const textShown = !!currentState.questionShownAt;
+        const timed = !!currentState.durationMs;
+        const counting = !!currentState.votingStartedAt;
+        const showCue =
+          status === "voting" && !!quiz && (!textShown || (timed && !counting));
+        cue.classList.toggle("hidden", !showCue);
+        if (showCue) {
+          cueText.disabled = busy || textShown;
+          cueText.textContent = textShown ? "問題文 表示済み" : "① 問題文を流す";
+          cueText.classList.toggle("qz-btn--primary", !textShown);
+          cueCount.classList.toggle("hidden", !timed);
+          cueCount.disabled = busy || counting;
+          cueCount.textContent = `② カウント開始（${Math.round(
+            (currentState.durationMs || 0) / 1000
+          )} 秒）`;
+          cueCount.classList.toggle("qz-btn--primary", textShown && !counting);
+          document.getElementById("cue-help").textContent = !textShown
+            ? "メイン画面は問題文を伏せて待っています。「問題文を流す」で 1 文字ずつ流れます。" +
+              (timed ? "カウントはまだ止まっています。" : "この問題は時間無制限です（手動で締切）。")
+            : "問題文を流しました。「カウント開始」を押すと残り時間が減り始めます。";
+        }
       }
 
       function renderLivePanel() {
@@ -806,6 +883,7 @@
             <div class="qz-row p-2 space-y-1.5 text-sm">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="w-3 h-3 rounded-full" style="background-color:${color}"></span>
+                <strong class="shrink-0" style="color:var(--coral)">${teamLabel(i)}</strong>
                 <input class="qz-input flex-1" style="min-width:120px;padding:6px 8px;font-size:14px"
                   value="${escapeHtml(t.name)}" placeholder="代表者名" data-action="rename" data-id="${t.id}">
                 <label class="qz-muted flex items-center gap-1">スコア
@@ -1064,7 +1142,7 @@
             }
             if (
               !confirm(
-                `「${team.name}」の点数を ${team.score || 0} 点 → ${n} 点に修正しますか？`
+                `「${teamLabel(teams.indexOf(team))} ${team.name}」の点数を ${team.score || 0} 点 → ${n} 点に修正しますか？`
               )
             ) {
               renderTeams();
@@ -1156,13 +1234,22 @@
         .addEventListener("click", () => {
           if (
             !confirm(
-              "デフォルトの 5 チームを作成します。既存のチームはそのまま残ります。"
+              "チームA〜F の 6 チームを作成します（代表者名は空欄。あとから入力してください）。"
             )
           )
             return;
-          const defaults = ["チーム A", "チーム B", "チーム C", "チーム D", "チーム E"];
+          if (
+            teams.length > 0 &&
+            !confirm(
+              `すでに ${teams.length} チームあります。その下に 6 チーム追加されます。よろしいですか？`
+            )
+          )
+            return;
+          const defaults = ["", "", "", "", "", ""];
           const batch = writeBatch(db);
-          const base = teams.length;
+          // 削除で順番に抜けがあっても既存チームの後ろに並ぶようにする
+          const base =
+            teams.length > 0 ? Math.max(...teams.map((t) => t.order || 0)) + 1 : 0;
           for (let i = 0; i < defaults.length; i++) {
             const newRef = doc(refs.teams());
             batch.set(newRef, {
@@ -1181,6 +1268,8 @@
         currentQuizId: null,
         currentQuizIndex: -1,
         votingStartedAt: null,
+        questionShownAt: null,
+        finalRevealCount: 0,
         scoredForQuizId: null,
         revealedCorrectIndex: null,
         scoredTeamIds: null,
@@ -1844,7 +1933,9 @@
               status: "voting",
               currentQuizId: quiz.id,
               currentQuizIndex: nextIndex,
-              votingStartedAt: now,
+              // 問題文とカウントは司会者の合図で始める（合図まで問題文は伏せ、残り時間は減らない）
+              votingStartedAt: null,
+              questionShownAt: null,
               // null = 無制限。タイマーを表示せず自動採点もしない。
               durationMs: durationSec ? durationSec * 1000 : null,
               closedAt: null,
@@ -1859,6 +1950,18 @@
             });
           });
         });
+
+      document.getElementById("btn-cue-text").addEventListener("click", () => {
+        const quiz = currentQuiz();
+        if (!quiz || currentState?.status !== "voting") return;
+        runOp(() => showQuestionText(quiz.id));
+      });
+
+      document.getElementById("btn-cue-count").addEventListener("click", () => {
+        const quiz = currentQuiz();
+        if (!quiz || currentState?.status !== "voting") return;
+        runOp(() => startCountdown(quiz.id));
+      });
 
       document.getElementById("btn-close").addEventListener("click", () => {
         const quiz = currentQuiz();
@@ -1942,7 +2045,17 @@
       document
         .getElementById("btn-final")
         .addEventListener("click", () => {
-          runOp(() => updateDoc(stateRef, { status: "final_ranking" }));
+          // 1 回目: 順位を伏せた最終結果画面へ。2 回目以降: 下位から 1 チームずつ発表。
+          if (currentState?.status !== "final_ranking") {
+            runOp(() =>
+              updateDoc(stateRef, { status: "final_ranking", finalRevealCount: 0 })
+            );
+            return;
+          }
+          const revealed = finalRevealedCount(currentState, teams.length);
+          if (revealed >= teams.length) return;
+          // 回数ではなく「何チーム目まで」を書くので、連打しても 1 チームずつしか進まない
+          runOp(() => updateDoc(stateRef, { finalRevealCount: revealed + 1 }));
         });
 
       document

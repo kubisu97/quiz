@@ -15,7 +15,7 @@ import {
   where,
   runTransaction,
   increment,
-} from "../vendor/firebase.js?v=20261027b";
+} from "../vendor/firebase.js?v=20261128a";
 
 export {
   doc,
@@ -34,10 +34,10 @@ export {
   runTransaction,
   increment,
   serverTimestamp,
-} from "../vendor/firebase.js?v=20261027b";
+} from "../vendor/firebase.js?v=20261128a";
 
 // 画面の隅に出すバージョン。デプロイが反映されたかの確認に使う。
-export const APP_VERSION = "2026.10.27b";
+export const APP_VERSION = "2026.11.28a";
 
 const env = typeof window !== "undefined" ? window.__ENV__ : null;
 
@@ -92,13 +92,14 @@ if (!envError) {
 
 export { app, auth, db };
 
-// 招待状サイトのパレットに合わせたチーム色。深緑の地に載る彩度に抑えている。
+// チーム色。会場のチーム札（A〜F のカード）と同じ並びにしている。
 export const TEAM_COLORS = [
-  "#ef7044",
-  "#4a7c9e",
-  "#d9a84e",
-  "#7f9e6c",
-  "#a86f9e",
+  "#e0409a", // A ピンク
+  "#f58a1f", // B オレンジ
+  "#6a3d9a", // C 紫
+  "#19b5f1", // D 水色
+  "#fdc22b", // E 黄
+  "#12a54a", // F 緑
 ];
 export const DURATION_MS = 30000;
 export const SCORE_PER_CORRECT = 10;
@@ -122,10 +123,10 @@ export const refs = {
 //   intro         … 参加方法の説明（クイズ開始前）
 //   join          … 参加受付（チームごとの QR と受付状況）
 //   explain       … ジャンル説明（説明のある問題の出題前。explainQuizId がその問題）
-//   voting        … 回答受付中
+//   voting        … 回答受付中（questionShownAt が入ると問題文が流れ、votingStartedAt が入るとカウント開始）
 //   closed        … 回答締切（採点前。当日決める問題はここで正解を選ぶ）
 //   result        … 正解発表（answerVideoPending の間は正解発表の動画を流し、正解は伏せる）
-//   final_ranking … 最終結果
+//   final_ranking … 最終結果（finalRevealCount チーム分だけ、下位から順に発表する）
 export const STATUS_LABELS = {
   waiting: "待機中",
   intro: "参加方法の説明",
@@ -177,6 +178,34 @@ export async function closeVoting(quizId) {
     const s = snap.data();
     if (!s || s.status !== "voting" || s.currentQuizId !== quizId) return;
     tx.update(stateRef, { status: "closed", closedAt: Date.now() });
+  });
+}
+
+// 問題文をメイン画面に流す合図（司会者が押す）。1 問につき 1 回だけ。
+export async function showQuestionText(quizId) {
+  const stateRef = refs.state();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(stateRef);
+    const s = snap.data();
+    if (!s || s.status !== "voting" || s.currentQuizId !== quizId || s.questionShownAt) return;
+    tx.update(stateRef, { questionShownAt: Date.now() });
+  });
+}
+
+// カウントダウン開始の合図（司会者が押す）。問題文がまだなら同時に流す。
+// votingStartedAt が入るまでは残り時間が減らず、時間切れの自動処理も動かない。
+export async function startCountdown(quizId) {
+  const stateRef = refs.state();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(stateRef);
+    const s = snap.data();
+    if (!s || s.status !== "voting" || s.currentQuizId !== quizId) return;
+    if (!s.durationMs || s.votingStartedAt) return;
+    const now = Date.now();
+    tx.update(stateRef, {
+      votingStartedAt: now,
+      ...(s.questionShownAt ? {} : { questionShownAt: now }),
+    });
   });
 }
 
@@ -255,6 +284,21 @@ export async function finishAnswerVideo(quizId) {
   });
 }
 
+// 最終結果の並び（点数の高い順。同点は登録順）。管理画面とメイン画面で同じ並びを使う。
+export function rankTeams(teams) {
+  return teams
+    .map((t, i) => ({ ...t, origIndex: i }))
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || a.origIndex - b.origIndex);
+}
+
+// 最終結果で発表済みのチーム数（下位から順に発表する）。
+// finalRevealCount が無い古いデータは全部発表済みとして扱う。
+export function finalRevealedCount(state, teamCount) {
+  const n = state?.finalRevealCount;
+  if (!Number.isInteger(n)) return teamCount;
+  return Math.max(0, Math.min(teamCount, n));
+}
+
 // ジャンル説明。先頭の【〇〇の説明】を見出しに使い、無ければジャンル名から作る。
 export function explainParts(quiz) {
   const text = String(quiz?.explain ?? "").trim();
@@ -302,6 +346,14 @@ export function teamJoinUrl(teamId) {
   const url = new URL("player.html", location.href);
   url.searchParams.set("team", teamId);
   return withAppParam(url.toString());
+}
+
+// チームの呼び名。登録順に チームA, チームB, … と自動で付く（代表者名に書かなくてよい）。
+export function teamLetter(index) {
+  return String.fromCharCode(65 + (Math.max(0, index) % 26));
+}
+export function teamLabel(index) {
+  return `チーム${teamLetter(index)}`;
 }
 
 // スマホで入力したメンバー名（受付で OK を押すと members と readyAt が入る）

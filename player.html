@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261027b" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128a" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -42,7 +42,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261027b" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128a" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -50,7 +50,7 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js?v=20261027b"></script>
+    <script src="env.js?v=20261128a"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -59,6 +59,7 @@
         APP_ID,
         APP_VERSION,
         TEAM_COLORS,
+        teamLabel,
         escapeHtml,
         renderSetupError,
         describeError,
@@ -75,7 +76,7 @@
         getDoc,
         query,
         orderBy,
-      } from "./js/firebase-init.js?v=20261027b";
+      } from "./js/firebase-init.js?v=20261128a";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
@@ -339,8 +340,25 @@
         );
       }
 
+      // チームA〜 は登録順の何番目かで決まるので、チーム一覧の並びを見ておく
+      let allTeamIds = null;
+      onSnapshot(
+        query(refs.teams(), orderBy("order")),
+        (snap) => {
+          allTeamIds = snap.docs.map((d) => d.id);
+          render();
+        },
+        (err) => conn.error(err)
+      );
+      function myTeamLabel() {
+        const i = allTeamIds ? allTeamIds.indexOf(teamId) : -1;
+        return i >= 0 ? teamLabel(i) : "";
+      }
+
       function teamColor() {
-        const idx = store.team?.order ?? 0;
+        // チーム名（A〜）と同じく並び順で決める。一覧が届くまでは order で代用
+        const pos = allTeamIds ? allTeamIds.indexOf(teamId) : -1;
+        const idx = pos >= 0 ? pos : store.team?.order ?? 0;
         return TEAM_COLORS[idx % TEAM_COLORS.length];
       }
 
@@ -352,6 +370,7 @@
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 shrink-0" style="background-color:${color}"></span>
+                <span class="qz-jp-head text-base shrink-0" style="color:var(--coral)">${myTeamLabel()}</span>
                 <span class="text-[10px] qz-muted shrink-0">代表</span>
                 <span class="qz-jp-head text-base truncate">${escapeHtml(
                   store.team.name
@@ -401,12 +420,13 @@
             ? `<p class="qz-panel--pink text-xs p-3 leading-relaxed">まだチームが登録されていません。司会者の案内をお待ちください。</p>`
             : pickerTeams
                 .map(
-                  (t) => `
+                  (t, i) => `
               <button type="button" class="qz-btn w-full" data-pick-team="${t.id}"
                 style="display:flex;align-items:center;gap:10px;padding:14px">
                 <span class="w-3 h-3 shrink-0" style="background-color:${
-                  TEAM_COLORS[(t.order ?? 0) % TEAM_COLORS.length]
+                  TEAM_COLORS[i % TEAM_COLORS.length]
                 }"></span>
+                <strong class="shrink-0" style="color:var(--coral)">${teamLabel(i)}</strong>
                 <span class="text-[11px] qz-muted">代表</span>
                 <span class="truncate">${escapeHtml(t.name)}</span>
               </button>`
@@ -447,6 +467,7 @@
           ${brandHeaderHtml(`
             <div class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 qz-panel">
               <span class="w-3 h-3" style="background-color:${color}"></span>
+              <span class="text-sm font-bold">${myTeamLabel()}</span>
               <span class="text-[11px]">代表</span>
               <span class="text-sm font-bold">${escapeHtml(t.name)}</span>
             </div>`)}
@@ -503,7 +524,7 @@
           // 同じ問題・同じステータスの間は全再描画せず選択状態のみ更新
           const key = `${store.state.currentQuizId || ""}:${status}:${
             store.quiz ? "q" : "l"
-          }`;
+          }:${questionShown() ? "s" : "h"}`;
           if (key === votingRenderKey && document.getElementById("choices")) {
             updateVotingSelection();
             return;
@@ -587,6 +608,11 @@
           </section>`;
       }
 
+      // 問題文は司会者の合図（questionShownAt）が来るまでスマホでも伏せる（メイン画面より先に読めないように）
+      function questionShown() {
+        return store.state?.status === "closed" || !!store.state?.questionShownAt;
+      }
+
       // durationMs が無い問題は無制限（司会者が手動で締め切る）
       function isUnlimited() {
         return !store.state?.durationMs;
@@ -647,9 +673,11 @@
                 }" style="font-size:1.75rem">${timerLabel(remaining)}</span>
               </div>
             </div>
-            <h1 class="qz-jp-head text-lg leading-snug">${escapeHtml(
-              quiz.question
-            )}</h1>
+            ${
+              questionShown()
+                ? `<h1 class="qz-jp-head text-lg leading-snug">${escapeHtml(quiz.question)}</h1>`
+                : `<p class="qz-panel--pink p-3 text-xs text-center font-bold">問題文はメイン画面（スクリーン）に出ます</p>`
+            }
             ${
               quiz.videoUrl
                 ? `<p class="qz-panel--pink p-3 text-xs text-center font-bold">▶ 動画はメイン画面（スクリーン）をご覧ください</p>`
@@ -790,7 +818,7 @@
             <h1 class="qz-jp-head text-lg">最終結果</h1>
             <p class="text-xs qz-muted">メイン画面のランキングをご確認ください</p>
             <div class="p-5" style="border:2.4px solid ${color};background:var(--pink-soft)">
-              <div class="text-[11px] qz-muted">${escapeHtml(
+              <div class="text-[11px] qz-muted">${myTeamLabel()} ${escapeHtml(
                 store.team.name
               )} の最終スコア</div>
               <div class="mt-1">
