@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261128b" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128c" />
     <style>
       /* main.html 固有 */
       body {
@@ -191,7 +191,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261128b" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128c" />
   </head>
   <body>
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
@@ -229,8 +229,8 @@
     </button>
     <div id="media-status" class="fixed bottom-2 right-3 z-40 text-[11px] qz-onDark-muted pointer-events-none"></div>
 
-    <script src="env.js?v=20261128b"></script>
-    <script src="vendor/qrcode.min.js?v=20261128b"></script>
+    <script src="env.js?v=20261128c"></script>
+    <script src="vendor/qrcode.min.js?v=20261128c"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -261,7 +261,9 @@
         teamLetter,
         teamLabel,
         RULES,
-      } from "./js/firebase-init.js?v=20261128b";
+        questionTypingPlan,
+        choicesRevealed,
+      } from "./js/firebase-init.js?v=20261128c";
 
       const root = document.getElementById("root");
       const overlay = document.getElementById("start-overlay");
@@ -993,12 +995,7 @@
         stopQuestionTyping();
         const el = document.getElementById("question-text");
         if (!el) return;
-        const chars = Array.from(String(text || ""));
-        // 長文でも間延びしないよう、全体で 3.5〜5 秒に収まる速度を選ぶ
-        const base = Math.max(
-          45,
-          Math.min(110, Math.floor(4200 / Math.max(1, chars.length)))
-        );
+        const { chars, pauseAfter, leadMs } = questionTypingPlan(text);
         let index = 0;
         el.textContent = "";
         el.classList.add("mq-typing");
@@ -1011,20 +1008,22 @@
           el.textContent += ch;
           index += 1;
           if (index < chars.length) {
-            // 句読点・記号のあとは長めに止めて「読ませる」
-            const pause = /[、。，,！!？?：:]/.test(ch)
-              ? base * 6
-              : /[「」『』（）()]/.test(ch)
-              ? base * 2
-              : base;
-            questionTypingTimer = setTimeout(tick, pause);
+            questionTypingTimer = setTimeout(tick, pauseAfter(ch));
           } else {
             el.classList.remove("mq-typing");
             questionTypingTimer = null;
+            setChoicesVisible(true); // 問題文が全部出たら選択肢を出す
           }
         };
-        // 画面が切り替わった直後に少し溜めてから流し始める
-        questionTypingTimer = setTimeout(tick, 320);
+        questionTypingTimer = setTimeout(tick, leadMs);
+      }
+
+      // 選択肢と問題の画像は問題文が流れ終わるまで隠す（場所は確保したままなのでレイアウトは動かない）
+      function setChoicesVisible(visible) {
+        document.querySelectorAll("#mq-voting ~ * .mq-reveal").forEach((el) => {
+          el.style.opacity = visible ? "1" : "0";
+          el.style.visibility = visible ? "visible" : "hidden";
+        });
       }
 
       function render() {
@@ -1530,6 +1529,8 @@
           typedQuizId !== typedKeyOf(quiz) &&
           Date.now() - state.questionShownAt < 20000;
         if (state.questionShownAt) typedQuizId = typedKeyOf(quiz);
+        // 選択肢と画像は問題文が全部出てから。文字送り中・合図の前は隠しておく
+        const choicesVisible = !typeNow && choicesRevealed(state, quiz);
 
         // 上: 問題文＋タイマー / 中: メディアを1カラムで大きく
         // 下: 選択肢と回答状況を2カラム
@@ -1614,14 +1615,19 @@
                       )}
                       ${
                         quiz.imageUrl
-                          ? `<img src="${quiz.imageUrl}" class="max-h-[60vh] w-auto max-w-full object-contain" style="border:2.4px solid var(--cream);box-shadow:10px 10px 0 0 rgba(0,0,0,.35)" />`
+                          ? `<img src="${quiz.imageUrl}" class="mq-reveal max-h-[60vh] w-auto max-w-full object-contain" style="transition:opacity .4s;${
+                              choicesVisible ? "" : "opacity:0;visibility:hidden;"
+                            }border:2.4px solid var(--cream);box-shadow:10px 10px 0 0 rgba(0,0,0,.35)" />`
                           : ""
                       }
                     </div>`
                   : ""
               }
               <div class="w-full grid lg:grid-cols-[1fr_auto] gap-5 items-start">
-                <div class="grid grid-cols-2 gap-4 min-w-0">
+                <div class="mq-reveal grid grid-cols-2 gap-4 min-w-0"
+                  style="transition:opacity .4s;${
+                    choicesVisible ? "" : "opacity:0;visibility:hidden"
+                  }">
                   ${quiz.choices
                     .map(
                       (c, i) => `
@@ -1701,8 +1707,14 @@
           const quiz = quizzes.find((q) => q.id === state.currentQuizId);
           if (quiz && typedQuizId !== typedKeyOf(quiz)) {
             typedQuizId = typedKeyOf(quiz);
+            setChoicesVisible(false);
             typeQuestion(quiz.question);
           }
+        }
+        // 文字送りが途中で止まった（再描画・再読み込み）ときも、流れ終わる時刻が来たら選択肢を出す
+        if (!questionTypingTimer) {
+          const quiz = quizzes.find((q) => q.id === state.currentQuizId);
+          if (choicesRevealed(state, quiz)) setChoicesVisible(true);
         }
         if (state.status !== "voting" || !state.durationMs) return; // 無制限・締切後はカウントダウンしない
         const duration = state.durationMs;

@@ -15,7 +15,7 @@ import {
   where,
   runTransaction,
   increment,
-} from "../vendor/firebase.js?v=20261128b";
+} from "../vendor/firebase.js?v=20261128c";
 
 export {
   doc,
@@ -34,10 +34,10 @@ export {
   runTransaction,
   increment,
   serverTimestamp,
-} from "../vendor/firebase.js?v=20261128b";
+} from "../vendor/firebase.js?v=20261128c";
 
 // 画面の隅に出すバージョン。デプロイが反映されたかの確認に使う。
-export const APP_VERSION = "2026.11.28b";
+export const APP_VERSION = "2026.11.28c";
 
 const env = typeof window !== "undefined" ? window.__ENV__ : null;
 
@@ -287,6 +287,29 @@ export async function finishAnswerVideo(quizId) {
 }
 
 // 最終結果の並び（点数の高い順。同点は登録順）。管理画面とメイン画面で同じ並びを使う。
+// 問題文の文字送り（メイン画面）の速度。スマホも同じ計算で「流れ終わる時刻」を出し、
+// 問題文が全部出てから選択肢を見せる。
+const TYPING_LEAD_MS = 320; // 画面が切り替わった直後に少し溜めてから流し始める
+export function questionTypingPlan(text) {
+  const chars = Array.from(String(text || ""));
+  // 長文でも間延びしないよう、全体で 3.5〜5 秒に収まる速度を選ぶ
+  const base = Math.max(45, Math.min(110, Math.floor(4200 / Math.max(1, chars.length))));
+  // 句読点・記号のあとは長めに止めて「読ませる」
+  const pauseAfter = (ch) =>
+    /[、。，,！!？?：:]/.test(ch) ? base * 6 : /[「」『』（）()]/.test(ch) ? base * 2 : base;
+  const totalMs =
+    TYPING_LEAD_MS + chars.slice(0, -1).reduce((sum, ch) => sum + pauseAfter(ch), 0);
+  return { chars, pauseAfter, leadMs: TYPING_LEAD_MS, totalMs };
+}
+
+// 選択肢を出してよいか。締切後は常に出す。合図（questionShownAt）の前は出さない。
+export function choicesRevealed(state, quiz, now = Date.now()) {
+  if (!state || !quiz) return false;
+  if (state.status === "closed") return true;
+  if (!state.questionShownAt) return false;
+  return now >= state.questionShownAt + questionTypingPlan(quiz.question).totalMs;
+}
+
 export function rankTeams(teams) {
   return teams
     .map((t, i) => ({ ...t, origIndex: i }))

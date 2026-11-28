@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261128b" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128c" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -42,7 +42,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261128b" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128c" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -50,7 +50,7 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js?v=20261128b"></script>
+    <script src="env.js?v=20261128c"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -71,13 +71,14 @@
         isLiveQuiz,
         correctIndexOf,
         choiceLetter,
+        choicesRevealed,
         onSnapshot,
         setDoc,
         updateDoc,
         getDoc,
         query,
         orderBy,
-      } from "./js/firebase-init.js?v=20261128b";
+      } from "./js/firebase-init.js?v=20261128c";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
@@ -525,7 +526,7 @@
           // 同じ問題・同じステータスの間は全再描画せず選択状態のみ更新
           const key = `${store.state.currentQuizId || ""}:${status}:${
             store.quiz ? "q" : "l"
-          }:${questionShown() ? "s" : "h"}`;
+          }:${questionShown() ? "s" : "h"}${choicesShown() ? "c" : ""}`;
           if (key === votingRenderKey && document.getElementById("choices")) {
             updateVotingSelection();
             return;
@@ -632,6 +633,11 @@
         return store.state?.status === "closed" || !!store.state?.questionShownAt;
       }
 
+      // 選択肢はメイン画面で問題文が流れ終わってから出す（それまでは回答もできない）
+      function choicesShown() {
+        return choicesRevealed(store.state, store.quiz);
+      }
+
       // durationMs が無い問題は無制限（司会者が手動で締め切る）
       function isUnlimited() {
         return !store.state?.durationMs;
@@ -703,13 +709,13 @@
                 : ""
             }
             ${
-              quiz.imageUrl
+              quiz.imageUrl && choicesShown()
                 ? `<img src="${quiz.imageUrl}" class="w-full max-h-72 object-contain" style="border:2px solid var(--forest)" />`
                 : ""
             }
           </section>
           <section id="choices" class="grid grid-cols-1 gap-3">
-            ${quiz.choices
+            ${(choicesShown() ? quiz.choices : [])
               .map((c, i) => {
                 const selected = answered && store.answer.choice === i;
                 const dim = locked && !selected;
@@ -867,6 +873,10 @@
           debug("時間切れのためスキップ");
           return;
         }
+        if (!choicesShown()) {
+          debug("選択肢がまだ出ていないためスキップ");
+          return;
+        }
         store.submitting = true;
         const letter = choiceLetter(choice);
         debug(
@@ -892,6 +902,12 @@
           store.submitting = false;
         }
       }
+
+      // 問題文が流れ終わる時刻が来たら選択肢を出す（state の更新が無くても切り替わるように）
+      setInterval(() => {
+        if (store.state?.status !== "voting" || !store.quiz) return;
+        if (choicesShown() && !document.querySelector("#choices button[data-choice]")) render();
+      }, 200);
 
       setInterval(() => {
         if (store.state?.status !== "voting" || !store.quiz) return;
