@@ -15,7 +15,7 @@ import {
   where,
   runTransaction,
   increment,
-} from "../vendor/firebase.js?v=20261128a";
+} from "../vendor/firebase.js?v=20261128b";
 
 export {
   doc,
@@ -34,10 +34,10 @@ export {
   runTransaction,
   increment,
   serverTimestamp,
-} from "../vendor/firebase.js?v=20261128a";
+} from "../vendor/firebase.js?v=20261128b";
 
 // 画面の隅に出すバージョン。デプロイが反映されたかの確認に使う。
-export const APP_VERSION = "2026.11.28a";
+export const APP_VERSION = "2026.11.28b";
 
 const env = typeof window !== "undefined" ? window.__ENV__ : null;
 
@@ -122,6 +122,7 @@ export const refs = {
 //   waiting       … 待機（開始前のタイトル・スコア表示）
 //   intro         … 参加方法の説明（クイズ開始前）
 //   join          … 参加受付（チームごとの QR と受付状況）
+//   rules         … ルール説明（受付が済んだあと、クイズ開始前に 1 枚見せる）
 //   explain       … ジャンル説明（説明のある問題の出題前。explainQuizId がその問題）
 //   voting        … 回答受付中（questionShownAt が入ると問題文が流れ、votingStartedAt が入るとカウント開始）
 //   closed        … 回答締切（採点前。当日決める問題はここで正解を選ぶ）
@@ -131,6 +132,7 @@ export const STATUS_LABELS = {
   waiting: "待機中",
   intro: "参加方法の説明",
   join: "参加受付（QR 表示）",
+  rules: "ルール説明",
   explain: "ジャンル説明（出題前）",
   voting: "回答受付中",
   closed: "回答締切（正解発表前）",
@@ -347,6 +349,14 @@ export function teamJoinUrl(teamId) {
   url.searchParams.set("team", teamId);
   return withAppParam(url.toString());
 }
+
+// クイズのルール。メイン画面の「ルール説明」とスマホの受付完了画面で同じ文面を使う。
+export const RULES = [
+  { icon: "screen", title: "これから問題が出ます", sub: "問題はスクリーンに、答えのボタンはスマホに出るよ" },
+  { icon: "talk", title: "チームで話し合ってね", sub: "答えはチームで 1 つ" },
+  { icon: "tap", title: "制限時間内にタップして回答してね", sub: "時間内なら選び直しても OK" },
+  { icon: "gift", title: "豪華？景品があるよ", sub: "正解して点数を集めよう" },
+];
 
 // チームの呼び名。登録順に チームA, チームB, … と自動で付く（代表者名に書かなくてよい）。
 export function teamLetter(index) {

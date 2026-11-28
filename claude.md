@@ -42,9 +42,10 @@ js/firebase-init.js: 共通処理。Firebase の関数は必ずここ経由で i
 
 5. 進行ステータス
 
-waiting → intro（参加方法の説明）→ join（チーム別 QR・受付）→ [explain（ジャンル説明）] → voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
+waiting → intro（参加方法の説明）→ join（チーム別 QR・受付）→ rules（ルール説明）→ [explain（ジャンル説明）] → voting（回答受付）→ closed（回答締切）→ result（正解発表）→ … → final_ranking
 
-- intro / join は管理画面の「使い方を表示」「参加QRを表示」で切り替える（出題中は押せない）。問題の合間に join に戻して QR を出し直すこともできる
+- intro / join / rules は管理画面の「① 使い方」「② 参加QR」「③ ルール説明」で切り替える。ルールの文面は firebase-init.js の RULES（メイン画面とスマホの受付完了画面で共通）
+- intro / join は管理画面のボタンで切り替える（出題中は押せない）。問題の合間に join に戻して QR を出し直すこともできる
 - explain は quizzes.explain がある問題だけ。「次の問題スタート」1 回目で説明、2 回目（「問題を出す」）で出題。
   説明中は currentQuizId / currentQuizIndex を動かさない（説明中に intro / join へ戻っても問題が飛ばない）
 - 正解発表の動画（answerVideoUrl）がある問題: 正解発表で先に採点し、answerVideoPending: true の間はメイン画面で動画だけを流す（正解・点数はメイン画面にもスマホにも出さない）。

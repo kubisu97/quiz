@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261128a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128b" />
     <style>
       /* main.html 固有 */
       body {
@@ -191,7 +191,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261128a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128b" />
   </head>
   <body>
     <main id="root" class="h-screen p-6 flex flex-col overflow-hidden">
@@ -229,8 +229,8 @@
     </button>
     <div id="media-status" class="fixed bottom-2 right-3 z-40 text-[11px] qz-onDark-muted pointer-events-none"></div>
 
-    <script src="env.js?v=20261128a"></script>
-    <script src="vendor/qrcode.min.js?v=20261128a"></script>
+    <script src="env.js?v=20261128b"></script>
+    <script src="vendor/qrcode.min.js?v=20261128b"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -260,7 +260,8 @@
         finalRevealedCount,
         teamLetter,
         teamLabel,
-      } from "./js/firebase-init.js?v=20261128a";
+        RULES,
+      } from "./js/firebase-init.js?v=20261128b";
 
       const root = document.getElementById("root");
       const overlay = document.getElementById("start-overlay");
@@ -1056,6 +1057,7 @@
         resultRenderSig = null;
         if (state.status === "intro") return renderIntro();
         if (state.status === "join") return renderJoin();
+        if (state.status === "rules") return renderRules();
         if (state.status === "explain") return renderExplain();
         lobbyRenderSig = null;
         if (state.status === "final_ranking") return renderFinal();
@@ -1155,6 +1157,98 @@
                   </section>`
                   )
                   .join("")}
+              </div>
+            </div>
+          </div>
+        `;
+        mountVideo(null);
+        scheduleFit();
+      }
+
+      // ルール説明のイラスト（線画）。外部画像に頼らず SVG で描く。
+      const RULE_ICONS = {
+        screen: `<rect x="6" y="9" width="52" height="34" rx="2" fill="#fff" stroke="#174c39" stroke-width="3"/>
+                 <path d="M24 55h16M32 43v12" stroke="#174c39" stroke-width="3" stroke-linecap="round"/>
+                 <text x="32" y="34" text-anchor="middle" font-size="22" font-weight="900" fill="#ef7044" font-family="sans-serif">Q</text>`,
+        talk: `<path d="M6 12h30a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H20l-8 8v-8H6a0 0 0 0 1 0 0z" fill="#fff" stroke="#174c39" stroke-width="3" stroke-linejoin="round"/>
+               <path d="M30 40h12l8 8v-8h4a4 4 0 0 0 4-4V24a4 4 0 0 0-4-4h-8" fill="#f6c9c0" stroke="#174c39" stroke-width="3" stroke-linejoin="round"/>
+               <circle cx="15" cy="23" r="2.5" fill="#ef7044"/><circle cx="23" cy="23" r="2.5" fill="#ef7044"/><circle cx="31" cy="23" r="2.5" fill="#ef7044"/>`,
+        tap: `<circle cx="42" cy="20" r="14" fill="#fff" stroke="#174c39" stroke-width="3"/>
+              <path d="M42 11v9l6 4" stroke="#ef7044" stroke-width="3" stroke-linecap="round" fill="none"/>
+              <path d="M20 34v-9a4 4 0 0 1 8 0v14l9 2a4 4 0 0 1 3 5l-2 10H22l-9-13a3.5 3.5 0 0 1 5-5z" fill="#f6c9c0" stroke="#174c39" stroke-width="3" stroke-linejoin="round"/>`,
+        gift: `<rect x="10" y="26" width="44" height="30" fill="#fff" stroke="#174c39" stroke-width="3"/>
+               <rect x="6" y="18" width="52" height="10" fill="#f6c9c0" stroke="#174c39" stroke-width="3"/>
+               <path d="M32 18v38" stroke="#ef7044" stroke-width="5"/>
+               <path d="M32 18c-4-12-18-10-14-3 2 3 8 3 14 3zm0 0c4-12 18-10 14-3-2 3-8 3-14 3z" fill="none" stroke="#ef7044" stroke-width="3" stroke-linejoin="round"/>`,
+      };
+      function ruleIconSvg(name, size) {
+        return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true" style="flex-shrink:0">${
+          RULE_ICONS[name] || ""
+        }</svg>`;
+      }
+
+      // スマホの回答画面の見本（実際の画面に似せた絵）。B を選んだところ。
+      function phoneMockHtml() {
+        const choices = ["A", "B", "C", "D"]
+          .map((k) => {
+            const on = k === "B";
+            return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:2.4px solid #174c39;background:${
+              on ? "#ef7044" : "#fff"
+            };color:${on ? "#fff" : "#174c39"};font-weight:900">
+                      <span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:${
+                        on ? "#fff" : "#174c39"
+                      };color:${on ? "#ef7044" : "#fff"};font-size:15px">${k}</span>
+                      <span style="height:8px;flex:1;background:currentColor;opacity:.3"></span>
+                    </div>`;
+          })
+          .join("");
+        return `
+          <div style="position:relative;width:250px;flex-shrink:0">
+            <div style="border:9px solid #10231c;border-radius:34px;background:#f7f2e8;padding:18px 14px 20px;box-shadow:12px 12px 0 0 rgba(0,0,0,.35)">
+              <div style="width:70px;height:7px;border-radius:9px;background:#10231c;margin:0 auto 14px"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;color:#174c39;font-weight:900">
+                <span style="font-size:13px;letter-spacing:.1em">Q1</span>
+                <span style="font-size:26px;color:#ef7044">15</span>
+              </div>
+              <div style="height:9px;background:#174c39;opacity:.75;margin-top:8px"></div>
+              <div style="height:9px;width:62%;background:#174c39;opacity:.75;margin-top:6px"></div>
+              <div style="display:grid;gap:8px;margin-top:14px">${choices}</div>
+            </div>
+            <svg width="92" height="92" viewBox="0 0 64 64" aria-hidden="true" style="position:absolute;right:-34px;top:150px">
+              <path d="M20 30v-13a4 4 0 0 1 8 0v18l11 2a4 4 0 0 1 3 5l-2 12H22L12 40a3.5 3.5 0 0 1 5-5z" fill="#f6c9c0" stroke="#10231c" stroke-width="3" stroke-linejoin="round"/>
+              <path d="M12 12l-5-5M24 7V1M36 12l5-5" stroke="#ef7044" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <p class="qz-label qz-onDark-muted text-center" style="font-size:11px;margin-top:18px">スマホの回答画面</p>
+          </div>`;
+      }
+
+      // ルール説明。受付が済んだあと、司会者が管理画面の「③ ルール説明」で出す。
+      function renderRules() {
+        typedQuizId = null;
+        if (lobbyRenderSig === "rules" && document.getElementById("mq-rules")) return;
+        lobbyRenderSig = "rules";
+        root.innerHTML = `
+          <header id="mq-rules" class="text-center shrink-0">
+            <p class="qz-display qz-display--pink" style="font-size:clamp(2.5rem,5vw,4.25rem)">Rules</p>
+            <p class="qz-jp-head mt-2" style="color:var(--cream);font-size:clamp(1.1rem,2vw,1.6rem)">クイズのルール</p>
+          </header>
+          <div class="mq-fit mt-6">
+            <div class="mq-fit-inner max-w-6xl mx-auto">
+              <div style="display:flex;align-items:center;justify-content:center;gap:72px">
+                ${phoneMockHtml()}
+                <div class="grid gap-5" style="flex:1;min-width:0">
+                  ${RULES.map(
+                    (r, i) => `
+                  <section class="qz-card flex items-center gap-5" style="padding:16px 22px">
+                    <div class="mq-step__num" style="flex-shrink:0">${i + 1}</div>
+                    ${ruleIconSvg(r.icon, 76)}
+                    <div class="min-w-0">
+                      <p class="qz-jp-head leading-snug" style="font-size:clamp(1.25rem,2.1vw,1.9rem)">${escapeHtml(r.title)}</p>
+                      <p class="qz-muted font-bold mt-1" style="font-size:clamp(.9rem,1.3vw,1.15rem)">${escapeHtml(r.sub)}</p>
+                    </div>
+                  </section>`
+                  ).join("")}
+                </div>
               </div>
             </div>
           </div>

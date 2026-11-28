@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet" media="print" onload="this.media='all'"
     />
-    <link rel="stylesheet" href="css/theme.css?v=20261128a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261128b" />
     <style>
       /* player.html 固有 */
       #debug {
@@ -42,7 +42,7 @@
       }
     </style>
     <!-- Tailwind はビルド済み CSS を同梱（cdn.tailwindcss.com は本番利用非推奨のため） -->
-    <link rel="stylesheet" href="css/tailwind.css?v=20261128a" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261128b" />
   </head>
   <body>
     <main id="root" class="max-w-md mx-auto px-4 py-5 pb-10 space-y-4">
@@ -50,7 +50,7 @@
     </main>
     <div id="debug">起動中...</div>
 
-    <script src="env.js?v=20261128a"></script>
+    <script src="env.js?v=20261128b"></script>
     <script type="module">
       import {
         ensureSignedIn,
@@ -60,6 +60,7 @@
         APP_VERSION,
         TEAM_COLORS,
         teamLabel,
+        RULES,
         escapeHtml,
         renderSetupError,
         describeError,
@@ -76,7 +77,7 @@
         getDoc,
         query,
         orderBy,
-      } from "./js/firebase-init.js?v=20261128a";
+      } from "./js/firebase-init.js?v=20261128b";
 
       const root = document.getElementById("root");
       const debugEl = document.getElementById("debug");
@@ -575,6 +576,24 @@
                 メイン画面にチームの名前が表示されます。<br />
                 クイズが始まるまで、この画面のままお待ちください
               </p>
+              <div class="p-4" style="border:2.4px solid var(--forest);text-align:left">
+                <div class="qz-label text-center" style="color:var(--coral);font-size:10px">Rules</div>
+                <div class="qz-jp-head text-sm text-center mt-0.5">クイズのルール</div>
+                <ol class="space-y-2 mt-3">
+                  ${RULES.map(
+                    (r, i) => `
+                  <li class="flex items-start gap-2">
+                    <span class="shrink-0 font-bold" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:var(--forest);color:var(--cream);font-size:12px">${
+                      i + 1
+                    }</span>
+                    <span class="min-w-0">
+                      <span class="text-sm font-bold" style="display:block;line-height:1.4">${escapeHtml(r.title)}</span>
+                      <span class="text-[11px] qz-muted" style="display:block">${escapeHtml(r.sub)}</span>
+                    </span>
+                  </li>`
+                  ).join("")}
+                </ol>
+              </div>
               ${
                 members.length
                   ? `<div class="qz-panel--pink p-4">
